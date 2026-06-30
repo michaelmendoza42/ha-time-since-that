@@ -3,10 +3,10 @@
   "name": "Chore Tracker",
   "codeowners": [],
   "config_flow": false,
-  "documentation": "https://github.com/michael/ha-chore-tracker",
+  "documentation": "https://github.com/michaelmendoza42/ha-time-since-that",
   "integration_type": "helper",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/michael/ha-chore-tracker/issues",
+  "issue_tracker": "https://github.com/michaelmendoza42/ha-time-since-that/issues",
   "requirements": [],
   "version": "0.1.0"
 }

@@ -1,5 +1,23 @@
 # Local/private deployment notes
 LOCAL.md
+LOCAL.*.md
+
+# Agent and AI assistant local context
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+CURSOR.md
+CODEX.md
+.agents/
+.pi/
+.ai/
+.aider*
+.claude/
+.cursor/
+.codex/
+.gemini/
+*.prompt.md
+*.session.jsonl
 
 # Generated Home Assistant package output
 output/
