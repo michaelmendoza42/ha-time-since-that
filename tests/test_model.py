@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 import unittest
 
-from custom_components.chore_tracker.model import (
+from custom_components.time_since_that.model import (
     ChoreConfigError,
     CompletionEvent,
     definition_from_dict,

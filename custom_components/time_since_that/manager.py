@@ -1,5 +1,5 @@
 # pyright: reportMissingImports=false, reportMissingModuleSource=false
-"""Runtime manager and storage coordination for Chore Tracker."""
+"""Runtime manager and storage coordination for Time Since That."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 Listener = Callable[[], None]
 
 
-class ChoreTrackerManager:
+class TimeSinceThatManager:
     """Own chore definitions, history, mutations, and derived state."""
 
     def __init__(self, hass: HomeAssistant, definitions: list[ChoreDefinition]) -> None:
@@ -48,11 +48,11 @@ class ChoreTrackerManager:
         if data is None:
             return
         if not isinstance(data, dict) or data.get("version") != STORAGE_VERSION:
-            raise ValueError("Unsupported Chore Tracker storage payload.")
+            raise ValueError("Unsupported Time Since That storage payload.")
 
         chores = data.get("chores", {})
         if not isinstance(chores, dict):
-            raise ValueError("Invalid Chore Tracker storage payload: chores must be an object.")
+            raise ValueError("Invalid Time Since That storage payload: chores must be an object.")
 
         for chore_id, chore_data in chores.items():
             if not isinstance(chore_data, dict):

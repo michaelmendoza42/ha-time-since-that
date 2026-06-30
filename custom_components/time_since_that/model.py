@@ -1,4 +1,4 @@
-"""Pure domain model and stats helpers for Chore Tracker."""
+"""Pure domain model and stats helpers for Time Since That."""
 
 from __future__ import annotations
 

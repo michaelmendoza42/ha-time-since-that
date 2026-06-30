@@ -1,9 +1,9 @@
-"""Constants for Chore Tracker."""
+"""Constants for Time Since That."""
 
 from __future__ import annotations
 
-DOMAIN = "chore_tracker"
-NAME = "Chore Tracker"
+DOMAIN = "time_since_that"
+NAME = "Time Since That"
 VERSION = "0.1.0"
 
 CONF_CHORES = "chores"

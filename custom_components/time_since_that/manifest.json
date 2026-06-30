@@ -1,6 +1,6 @@
 {
-  "domain": "chore_tracker",
-  "name": "Chore Tracker",
+  "domain": "time_since_that",
+  "name": "Time Since That",
   "codeowners": [],
   "config_flow": false,
   "documentation": "https://github.com/michaelmendoza42/ha-time-since-that",

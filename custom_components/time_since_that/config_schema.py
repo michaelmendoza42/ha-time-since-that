@@ -1,5 +1,5 @@
 # pyright: reportMissingImports=false, reportMissingModuleSource=false
-"""YAML configuration schema for Chore Tracker."""
+"""YAML configuration schema for Time Since That."""
 
 from __future__ import annotations
 

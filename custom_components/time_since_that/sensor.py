@@ -1,5 +1,5 @@
 # pyright: reportMissingImports=false, reportMissingModuleSource=false
-"""Sensor platform for Chore Tracker."""
+"""Sensor platform for Time Since That."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from .const import DATA_MANAGER, DOMAIN
-from .manager import ChoreTrackerManager
+from .manager import TimeSinceThatManager
 
 SCAN_INTERVAL = timedelta(minutes=1)
 
@@ -24,8 +24,8 @@ async def async_setup_platform(
     async_add_entities: AddEntitiesCallback,
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
-    """Set up Chore Tracker sensors from YAML."""
-    manager: ChoreTrackerManager = hass.data[DOMAIN][DATA_MANAGER]
+    """Set up Time Since That sensors from YAML."""
+    manager: TimeSinceThatManager = hass.data[DOMAIN][DATA_MANAGER]
     async_add_entities(
         ChoreSensor(manager, chore_id) for chore_id in manager.chore_ids
     )
@@ -36,13 +36,13 @@ class ChoreSensor(SensorEntity):
 
     _attr_should_poll = False
 
-    def __init__(self, manager: ChoreTrackerManager, chore_id: str) -> None:
+    def __init__(self, manager: TimeSinceThatManager, chore_id: str) -> None:
         """Initialize a chore sensor."""
         self._manager = manager
         self._chore_id = chore_id
         self._definition = manager.definitions[chore_id]
-        self._attr_name = f"Chore {self._definition.name}"
-        self._attr_unique_id = f"chore_tracker_{chore_id}"
+        self._attr_name = f"Time Since That {self._definition.name}"
+        self._attr_unique_id = f"time_since_that_{chore_id}"
         self._remove_manager_listener = None
         self._remove_time_listener = None
 

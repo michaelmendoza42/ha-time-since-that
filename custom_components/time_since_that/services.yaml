@@ -3,7 +3,7 @@ mark_done:
   description: Record a completion event for a chore and update its freshness stats.
   target:
     entity:
-      integration: chore_tracker
+      integration: time_since_that
       domain: sensor
   fields:
     chore_id:
