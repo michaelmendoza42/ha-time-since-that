@@ -81,7 +81,7 @@ class TestChoreModel(unittest.TestCase):
             chore_id="scoop_cat_litter",
             done_at=now - timedelta(days=3, hours=2),
             user_id="user-1",
-            user_name="Michael",
+            user_name="Example User",
         )
 
         snapshot = build_snapshot(definition, [event], now)
@@ -90,7 +90,7 @@ class TestChoreModel(unittest.TestCase):
         self.assertEqual(snapshot.attributes["elapsed_value"], 3)
         self.assertTrue(snapshot.attributes["over_recommended"])
         self.assertEqual(snapshot.attributes["over_by"], "1 day")
-        self.assertEqual(snapshot.attributes["last_done_by_name"], "Michael")
+        self.assertEqual(snapshot.attributes["last_done_by_name"], "Example User")
         self.assertIsNone(snapshot.attributes["average_interval"])
 
     def test_household_stats_snapshot(self) -> None:
