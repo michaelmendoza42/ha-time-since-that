@@ -1,0 +1,14 @@
+# Local/private deployment notes
+LOCAL.md
+
+# Generated Home Assistant package output
+output/
+
+# Python local state
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# macOS
+.DS_Store

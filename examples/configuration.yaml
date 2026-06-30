@@ -1,0 +1,30 @@
+chore_tracker:
+  chores:
+    - id: move_laundry
+      name: Move laundry
+      recommended_every:
+        value: 45
+        unit: minutes
+      elapsed_display:
+        unit: minutes
+        rounding: nearest
+
+    - id: refill_humidifier
+      name: Refill humidifier
+      recommended_every:
+        value: 12
+        unit: hours
+      elapsed_display:
+        unit: hours
+        rounding: floor
+
+    - id: scoop_cat_litter
+      name: Scoop cat litter
+      category: pets
+      area: Bathroom
+      recommended_every:
+        value: 2
+        unit: days
+      elapsed_display:
+        unit: days
+        rounding: floor

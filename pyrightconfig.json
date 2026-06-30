@@ -1,0 +1,10 @@
+{
+  "typeCheckingMode": "basic",
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false,
+  "exclude": [
+    ".git",
+    ".venv",
+    "venv"
+  ]
+}

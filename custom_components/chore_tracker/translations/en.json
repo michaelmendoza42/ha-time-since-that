@@ -1,0 +1,15 @@
+{
+  "title": "Chore Tracker",
+  "services": {
+    "mark_done": {
+      "name": "Mark chore done",
+      "description": "Record a completion event for a chore and update its freshness stats.",
+      "fields": {
+        "chore_id": {
+          "name": "Chore ID",
+          "description": "Stable chore id from YAML. Use this if not targeting a chore sensor entity."
+        }
+      }
+    }
+  }
+}
