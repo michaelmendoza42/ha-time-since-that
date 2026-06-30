@@ -1,5 +1,5 @@
 # pyright: reportMissingImports=false, reportMissingModuleSource=false
-"""Home Assistant setup for Chore Tracker."""
+"""Home Assistant setup for Time Since That."""
 
 from __future__ import annotations
 
@@ -18,17 +18,17 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup(hass: Any, config: dict[str, Any]) -> bool:
-    """Set up Chore Tracker from YAML."""
+    """Set up Time Since That from YAML."""
     from homeassistant.helpers import discovery
 
-    from .manager import ChoreTrackerManager
+    from .manager import TimeSinceThatManager
 
     if DOMAIN not in config:
         return True
 
     chore_config = config[DOMAIN][CONF_CHORES]
     definitions = [definition_from_dict(item) for item in chore_config]
-    manager = ChoreTrackerManager(hass, definitions)
+    manager = TimeSinceThatManager(hass, definitions)
     await manager.async_load()
 
     hass.data.setdefault(DOMAIN, {})[DATA_MANAGER] = manager
@@ -39,7 +39,7 @@ async def async_setup(hass: Any, config: dict[str, Any]) -> bool:
 
 
 def _register_services(hass: Any, manager: Any) -> None:
-    """Register Chore Tracker services."""
+    """Register Time Since That services."""
     import voluptuous as vol
     from homeassistant.const import ATTR_ENTITY_ID
     from homeassistant.helpers import config_validation as cv

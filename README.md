@@ -4,20 +4,16 @@ Time Since That is a HACS-installable Home Assistant custom integration for answ
 
 The current `0.1.0` implementation is chore-focused. You define tracked items in YAML, Home Assistant creates one sensor per item, and calling a service records a completion event. The sensor then shows freshness, recommended cadence status, and household-level interval stats.
 
-## Current implementation names
-
-This repository has been renamed to `ha-time-since-that`, but the current Home Assistant integration still exposes its v1 surface under the original chore-focused names:
+## Integration names
 
 | Surface | Current value |
 | --- | --- |
-| HACS/integration display name | `Chore Tracker` |
-| Integration domain | `chore_tracker` |
-| YAML root key | `chore_tracker` |
-| Service | `chore_tracker.mark_done` |
-| Example entity | `sensor.chore_scoop_cat_litter` |
-| Storage key | `chore_tracker.history` |
-
-A future migration can rename the integration/domain. For now, use the names above when configuring Home Assistant.
+| HACS/integration display name | `Time Since That` |
+| Integration domain | `time_since_that` |
+| YAML root key | `time_since_that` |
+| Service | `time_since_that.mark_done` |
+| Example entity | `sensor.time_since_that_scoop_cat_litter` |
+| Storage key | `time_since_that.history` |
 
 ## Status
 
@@ -27,7 +23,7 @@ Implemented:
 
 - YAML configuration for tracked chores/items.
 - One sensor entity per configured item.
-- A `chore_tracker.mark_done` service.
+- A `time_since_that.mark_done` service.
 - Local Home Assistant storage for completion history.
 - User attribution when Home Assistant provides a service-call user context.
 - Elapsed freshness display, recommended cadence status, and household-level interval stats.
@@ -45,15 +41,15 @@ Deferred:
 ### HACS custom repository
 
 1. In HACS, add this repository as a custom repository with category **Integration**.
-2. Install **Chore Tracker**.
+2. Install **Time Since That**.
 3. Restart Home Assistant.
 
 ### Manual install
 
-Copy `custom_components/chore_tracker` into your Home Assistant config directory:
+Copy `custom_components/time_since_that` into your Home Assistant config directory:
 
 ```text
-/config/custom_components/chore_tracker
+/config/custom_components/time_since_that
 ```
 
 Then restart Home Assistant.
@@ -63,7 +59,7 @@ Then restart Home Assistant.
 Add items to `configuration.yaml`:
 
 ```yaml
-chore_tracker:
+time_since_that:
   chores:
     - id: scoop_cat_litter
       name: Scoop cat litter
@@ -117,7 +113,7 @@ Supported rounding: `floor`, `ceil`, `nearest`.
 Each configured item creates one sensor, for example:
 
 ```text
-sensor.chore_scoop_cat_litter
+sensor.time_since_that_scoop_cat_litter
 ```
 
 Before the item has ever been marked done, the sensor state is:
@@ -167,15 +163,15 @@ Full completion history is stored locally but is not exposed as an entity attrib
 Use the canonical service action against an entity:
 
 ```yaml
-service: chore_tracker.mark_done
+service: time_since_that.mark_done
 target:
-  entity_id: sensor.chore_scoop_cat_litter
+  entity_id: sensor.time_since_that_scoop_cat_litter
 ```
 
 You can also call it by configured id:
 
 ```yaml
-service: chore_tracker.mark_done
+service: time_since_that.mark_done
 data:
   chore_id: scoop_cat_litter
 ```
@@ -207,13 +203,13 @@ The current Home Assistant flow behind that card is:
 
 ```text
 configuration.yaml
-  chore_tracker.chores[]
+  time_since_that.chores[]
         │
         ▼
 Home Assistant startup validates YAML
         │
         ▼
-Creates sensor.chore_<id>
+Creates sensor.time_since_that_<id>
         │
         ▼
 Dashboard shows sensor state + attributes
@@ -222,7 +218,7 @@ Dashboard shows sensor state + attributes
 User taps "Mark done"
         │
         ▼
-Calls chore_tracker.mark_done
+Calls time_since_that.mark_done
         │
         ▼
 Completion event saved to .storage
@@ -235,20 +231,20 @@ Example built-in button card:
 
 ```yaml
 type: button
-entity: sensor.chore_scoop_cat_litter
+entity: sensor.time_since_that_scoop_cat_litter
 name: Scoop cat litter
 tap_action:
   action: call-service
-  service: chore_tracker.mark_done
+  service: time_since_that.mark_done
   target:
-    entity_id: sensor.chore_scoop_cat_litter
+    entity_id: sensor.time_since_that_scoop_cat_litter
 ```
 
 Example entity card to show the resulting sensor:
 
 ```yaml
 type: entity
-entity: sensor.chore_scoop_cat_litter
+entity: sensor.time_since_that_scoop_cat_litter
 name: Scoop cat litter
 attribute: elapsed
 ```
@@ -284,4 +280,3 @@ Home Assistant validation still requires a Home Assistant development/test envir
 - Household-level stats only; per-user stats are stored for future use but not calculated/exposed.
 - YAML changes require restart.
 - No automatic config generation, restart, or deployment behavior.
-- Public code still uses the v1 `chore_tracker` integration domain and `Chore Tracker` display name.

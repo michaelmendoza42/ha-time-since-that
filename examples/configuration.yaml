@@ -1,4 +1,4 @@
-chore_tracker:
+time_since_that:
   chores:
     - id: move_laundry
       name: Move laundry

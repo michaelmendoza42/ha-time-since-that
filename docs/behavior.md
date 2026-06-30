@@ -1,6 +1,6 @@
-# Chore Tracker behavior
+# Time Since That behavior
 
-Chore Tracker is a YAML-configured Home Assistant custom integration for household chore freshness tracking.
+Time Since That is a YAML-configured Home Assistant custom integration for household chore freshness tracking.
 
 ## Core concepts
 
@@ -14,7 +14,7 @@ Chore Tracker is a YAML-configured Home Assistant custom integration for househo
 ## YAML contract
 
 ```yaml
-chore_tracker:
+time_since_that:
   chores:
     - id: scoop_cat_litter
       name: Scoop cat litter
