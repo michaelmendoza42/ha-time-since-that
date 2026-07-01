@@ -93,6 +93,18 @@ time_since_that:
 
 YAML changes require a Home Assistant restart in v1.
 
+### Generate the YAML with the included web app
+
+This repo includes a dependency-free browser helper at [`tools/yaml-generator/index.html`](tools/yaml-generator/index.html). Open it locally, add each task or chore in the form, then copy or download the generated `time_since_that.yaml`.
+
+For split-file configuration, add this to `configuration.yaml`:
+
+```yaml
+time_since_that: !include time_since_that.yaml
+```
+
+The generator output starts with `chores:`, so it is ready to save as the included `time_since_that.yaml` file.
+
 ## Chore fields
 
 | Field | Required | Description |

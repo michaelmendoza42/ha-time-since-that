@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Time Since That YAML Generator</title>
+    <link rel="icon" href="data:," />
+    <meta
+      name="description"
+      content="Generate Home Assistant YAML for the Time Since That custom integration."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero" aria-labelledby="page-title">
+        <div class="hero__content">
+          <p class="eyebrow">Configuration helper</p>
+          <h1 id="page-title">Build your Time Since That YAML.</h1>
+          <p class="lede">
+            Add each task or chore, choose its cadence, then copy the generated
+            Home Assistant include file.
+          </p>
+        </div>
+        <aside class="install-note" aria-labelledby="include-title">
+          <p id="include-title" class="install-note__label">configuration.yaml</p>
+          <pre><code>time_since_that: !include time_since_that.yaml</code></pre>
+          <p>
+            Save the generated output as <code>time_since_that.yaml</code> next
+            to your Home Assistant <code>configuration.yaml</code>.
+          </p>
+        </aside>
+      </section>
+
+      <section class="workspace" aria-label="YAML generator">
+        <form id="chore-form" class="panel panel--form">
+          <div class="panel__header">
+            <div>
+              <p class="eyebrow">Tracked items</p>
+              <h2>Tasks and chores</h2>
+            </div>
+            <button class="button button--secondary" type="button" id="load-sample">
+              Load sample
+            </button>
+          </div>
+
+          <div id="items" class="items" aria-live="polite"></div>
+
+          <div class="actions">
+            <button class="button button--primary" type="button" id="add-item">
+              Add another item
+            </button>
+            <button class="button button--ghost" type="reset">Reset</button>
+          </div>
+        </form>
+
+        <section class="panel panel--output" aria-labelledby="output-title">
+          <div class="panel__header panel__header--output">
+            <div>
+              <p class="eyebrow">Generated file</p>
+              <h2 id="output-title">time_since_that.yaml</h2>
+            </div>
+            <div class="output-actions">
+              <button class="button button--secondary" type="button" id="copy-yaml">
+                Copy
+              </button>
+              <button class="button button--secondary" type="button" id="download-yaml">
+                Download
+              </button>
+            </div>
+          </div>
+
+          <p id="status" class="status" role="status">Ready.</p>
+          <pre class="yaml-preview"><code id="yaml-output"></code></pre>
+        </section>
+      </section>
+    </main>
+
+    <template id="item-template">
+      <fieldset class="item-card">
+        <legend class="item-card__legend">Item</legend>
+        <div class="item-card__topline">
+          <span class="item-card__index">Item</span>
+          <button class="remove-button" type="button">Remove</button>
+        </div>
+
+        <div class="field-grid">
+          <label class="field field--wide">
+            <span>Name</span>
+            <input name="name" type="text" placeholder="Scoop cat litter" required />
+            <small>Shown in Home Assistant.</small>
+          </label>
+
+          <label class="field">
+            <span>ID</span>
+            <input
+              name="id"
+              type="text"
+              placeholder="scoop_cat_litter"
+              pattern="[a-z][a-z0-9_]*"
+              required
+            />
+            <small>Lowercase snake_case. Auto-fills from name until edited.</small>
+          </label>
+
+          <label class="field">
+            <span>Category</span>
+            <input name="category" type="text" placeholder="pets" />
+            <small>Optional dashboard metadata.</small>
+          </label>
+
+          <label class="field">
+            <span>Area</span>
+            <input name="area" type="text" placeholder="Bathroom" />
+            <small>Optional text label, not an HA Area Registry link.</small>
+          </label>
+
+          <div class="field-group">
+            <p class="field-group__label">Recommended cadence</p>
+            <div class="inline-fields">
+              <label class="field">
+                <span>Every</span>
+                <input name="recommendedValue" type="number" min="0" step="0.25" placeholder="2" />
+              </label>
+              <label class="field">
+                <span>Unit</span>
+                <select name="recommendedUnit">
+                  <option value="days">days</option>
+                  <option value="hours">hours</option>
+                  <option value="minutes">minutes</option>
+                </select>
+              </label>
+            </div>
+            <small>Leave the value blank if there is no recommendation.</small>
+          </div>
+
+          <div class="field-group">
+            <p class="field-group__label">Elapsed display</p>
+            <div class="inline-fields">
+              <label class="field">
+                <span>Unit</span>
+                <select name="displayUnit">
+                  <option value="days">days</option>
+                  <option value="hours">hours</option>
+                  <option value="minutes">minutes</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Rounding</span>
+                <select name="rounding">
+                  <option value="floor">floor</option>
+                  <option value="ceil">ceil</option>
+                  <option value="nearest">nearest</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
