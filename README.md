@@ -2,7 +2,7 @@
 
 Time Since That is a HACS-installable Home Assistant custom integration for answering one household question: **how long has it been since that thing was last done?**
 
-The current `0.1.0` implementation is chore-focused. You define tracked items in YAML, Home Assistant creates one sensor per item, and calling a service records a completion event. The sensor then shows freshness, recommended cadence status, and household-level interval stats.
+The current `0.2.0` implementation is chore-focused. You define tracked items in YAML, Home Assistant creates one sensor per item, and calling a service records a completion event. The sensor then shows freshness, recommended cadence status, and household-level interval stats.
 
 ## Integration names
 
@@ -17,12 +17,13 @@ The current `0.1.0` implementation is chore-focused. You define tracked items in
 
 ## Status
 
-Early `0.1.0` implementation.
+Early `0.2.0` implementation.
 
 Implemented:
 
 - YAML configuration for tracked chores/items.
 - One sensor entity per configured item.
+- One button entity per configured item for marking it done from dashboards.
 - A `time_since_that.mark_done` service.
 - Local Home Assistant storage for completion history.
 - User attribution when Home Assistant provides a service-call user context.
@@ -122,11 +123,14 @@ Supported rounding: `floor`, `ceil`, `nearest`.
 
 ## What Home Assistant creates
 
-Each configured item creates one sensor, for example:
+Each configured item creates one sensor and one mark-done button, for example:
 
 ```text
 sensor.time_since_that_scoop_cat_litter
+button.mark_scoop_cat_litter_done
 ```
+
+The button entity calls the same completion-recording path as the service, so you can add it directly to an Entities card or any dashboard card that can show button entities.
 
 Before the item has ever been marked done, the sensor state is:
 
@@ -172,7 +176,13 @@ Full completion history is stored locally but is not exposed as an entity attrib
 
 ## Marking something done
 
-Use the canonical service action against an entity:
+The easiest path is to press the generated button entity:
+
+```text
+button.mark_scoop_cat_litter_done
+```
+
+You can also use the canonical service action against a sensor or button entity:
 
 ```yaml
 service: time_since_that.mark_done
@@ -180,7 +190,7 @@ target:
   entity_id: sensor.time_since_that_scoop_cat_litter
 ```
 
-You can also call it by configured id:
+Or call it by configured id:
 
 ```yaml
 service: time_since_that.mark_done
@@ -192,7 +202,7 @@ The service records a completion event with timestamp, source, Home Assistant co
 
 ## Example card and flow
 
-There is no custom Lovelace card in v1. The current integration is designed to work with standard Home Assistant entity/button cards or any dashboard card that can read a sensor and call a service.
+There is no custom Lovelace card in v1. The current integration is designed to work with standard Home Assistant entity/button cards. Add the generated sensor and button entities to an Entities card for the least manual setup.
 
 A simple dashboard concept can look like this:
 
@@ -222,15 +232,16 @@ Home Assistant startup validates YAML
         │
         ▼
 Creates sensor.time_since_that_<id>
+and button.mark_<id>_done
         │
         ▼
-Dashboard shows sensor state + attributes
+Dashboard shows sensor state + button
         │
         ▼
-User taps "Mark done"
+User presses generated button
         │
         ▼
-Calls time_since_that.mark_done
+Records completion event
         │
         ▼
 Completion event saved to .storage
@@ -239,20 +250,19 @@ Completion event saved to .storage
 Sensor refreshes state and stats
 ```
 
-Example built-in button card:
+Example Entities card with no per-button service YAML:
 
 ```yaml
-type: button
-entity: sensor.time_since_that_scoop_cat_litter
-name: Scoop cat litter
-tap_action:
-  action: call-service
-  service: time_since_that.mark_done
-  target:
-    entity_id: sensor.time_since_that_scoop_cat_litter
+type: entities
+title: Time Since That
+entities:
+  - entity: sensor.time_since_that_scoop_cat_litter
+    name: Scoop cat litter
+  - entity: button.mark_scoop_cat_litter_done
+    name: Mark done
 ```
 
-Example entity card to show the resulting sensor:
+Example entity card to show only the resulting sensor:
 
 ```yaml
 type: entity

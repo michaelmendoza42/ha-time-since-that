@@ -42,6 +42,8 @@ Supported rounding modes are `floor`, `ceil`, and `nearest`. Rounding affects di
 
 ## State and history
 
+Each configured chore exposes a freshness sensor and a mark-done button entity. Pressing the button records a completion event for that chore.
+
 Completion history is stored locally in Home Assistant `.storage` using a versioned storage key. The integration stores timestamp, source, Home Assistant context IDs, and user attribution when Home Assistant provides a user context.
 
 Full event history is not exposed as sensor attributes to avoid recorder bloat.

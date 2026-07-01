@@ -2,12 +2,12 @@
   "title": "Time Since That",
   "services": {
     "mark_done": {
-      "name": "Mark chore done",
-      "description": "Record a completion event for a chore and update its freshness stats.",
+      "name": "Mark item done",
+      "description": "Record a completion event for an item and update its freshness stats.",
       "fields": {
         "chore_id": {
-          "name": "Chore ID",
-          "description": "Stable chore id from YAML. Use this if not targeting a chore sensor entity."
+          "name": "Item ID",
+          "description": "Stable item id from YAML. Use this if not targeting a Time Since That entity."
         }
       }
     }

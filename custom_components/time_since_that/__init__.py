@@ -9,6 +9,8 @@ from typing import Any
 from .const import CONF_CHORE_ID, CONF_CHORES, DATA_MANAGER, DOMAIN, SERVICE_MARK_DONE
 from .model import definition_from_dict
 
+PLATFORMS = ("sensor", "button")
+
 try:
     from .config_schema import CONFIG_SCHEMA
 except ModuleNotFoundError:  # pragma: no cover - Home Assistant deps absent in pure tests
@@ -34,7 +36,8 @@ async def async_setup(hass: Any, config: dict[str, Any]) -> bool:
     hass.data.setdefault(DOMAIN, {})[DATA_MANAGER] = manager
     _register_services(hass, manager)
 
-    await discovery.async_load_platform(hass, "sensor", DOMAIN, {}, config)
+    for platform in PLATFORMS:
+        await discovery.async_load_platform(hass, platform, DOMAIN, {}, config)
     return True
 
 
