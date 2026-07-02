@@ -2,7 +2,7 @@
 
 Time Since That is a HACS-installable Home Assistant custom integration for answering one household question: **how long has it been since that thing was last done?**
 
-The current `0.2.0` implementation is chore-focused. You define tracked items in YAML, Home Assistant creates one sensor per item, and calling a service records a completion event. The sensor then shows freshness, recommended cadence status, and household-level interval stats.
+The current `0.3.0` implementation is chore-focused. You define tracked items in YAML, Home Assistant creates one sensor per item, and calling a service records a completion event. The sensor then shows freshness, recommended cadence status, and household-level interval stats.
 
 ## Integration names
 
@@ -17,13 +17,14 @@ The current `0.2.0` implementation is chore-focused. You define tracked items in
 
 ## Status
 
-Early `0.2.0` implementation.
+Early `0.3.0` implementation.
 
 Implemented:
 
 - YAML configuration for tracked chores/items.
 - One sensor entity per configured item.
 - One button entity per configured item for marking it done from dashboards.
+- A bundled custom Lovelace card for combined sensor display and mark-done actions.
 - A `time_since_that.mark_done` service.
 - Local Home Assistant storage for completion history.
 - User attribution when Home Assistant provides a service-call user context.
@@ -33,7 +34,6 @@ Implemented:
 Deferred:
 
 - Config flow/options flow.
-- Custom Lovelace card.
 - Per-user stats.
 - Automatic config generation or deployment behavior.
 
@@ -202,7 +202,27 @@ The service records a completion event with timestamp, source, Home Assistant co
 
 ## Example card and flow
 
-There is no custom Lovelace card in v1. The current integration is designed to work with standard Home Assistant entity/button cards. Add the generated sensor and button entities to an Entities card for the least manual setup.
+The integration bundles a custom Lovelace card that combines each sensor readout with a mark-done button.
+
+Add this dashboard resource after installing/restarting the integration:
+
+```text
+/time_since_that/time-since-that-card.js
+```
+
+Use resource type **JavaScript module**.
+
+Then add a manual card:
+
+```yaml
+type: custom:time-since-that-card
+title: Time Since That
+entities:
+  - sensor.time_since_that_scoop_cat_litter
+  - sensor.time_since_that_refill_humidifier
+```
+
+The card reads each sensor's state and attributes, then calls `time_since_that.mark_done` when you press **Mark done**.
 
 A simple dashboard concept can look like this:
 
@@ -235,10 +255,10 @@ Creates sensor.time_since_that_<id>
 and button.mark_<id>_done
         │
         ▼
-Dashboard shows sensor state + button
+Dashboard card shows sensor state + inline action
         │
         ▼
-User presses generated button
+User presses Mark done
         │
         ▼
 Records completion event
@@ -250,7 +270,7 @@ Completion event saved to .storage
 Sensor refreshes state and stats
 ```
 
-Example Entities card with no per-button service YAML:
+You can still use the generated button entities without the custom card:
 
 ```yaml
 type: entities
@@ -298,7 +318,7 @@ Home Assistant validation still requires a Home Assistant development/test envir
 ## Limitations in v1
 
 - YAML configuration only; no config flow/options flow yet.
-- No custom Lovelace card or stats screen yet.
+- No dedicated stats screen yet.
 - Household-level stats only; per-user stats are stored for future use but not calculated/exposed.
 - YAML changes require restart.
 - No automatic config generation, restart, or deployment behavior.

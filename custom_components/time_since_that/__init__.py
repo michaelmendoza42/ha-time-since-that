@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from .const import CONF_CHORE_ID, CONF_CHORES, DATA_MANAGER, DOMAIN, SERVICE_MARK_DONE
@@ -17,6 +18,9 @@ except ModuleNotFoundError:  # pragma: no cover - Home Assistant deps absent in 
     CONFIG_SCHEMA = None  # type: ignore[assignment]
 
 _LOGGER = logging.getLogger(__name__)
+
+CARD_FRONTEND_PATH = Path(__file__).parent / "frontend"
+CARD_URL = f"/{DOMAIN}"
 
 
 async def async_setup(hass: Any, config: dict[str, Any]) -> bool:
@@ -35,10 +39,20 @@ async def async_setup(hass: Any, config: dict[str, Any]) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[DATA_MANAGER] = manager
     _register_services(hass, manager)
+    await _register_frontend(hass)
 
     for platform in PLATFORMS:
         await discovery.async_load_platform(hass, platform, DOMAIN, {}, config)
     return True
+
+
+async def _register_frontend(hass: Any) -> None:
+    """Serve the bundled Lovelace card JavaScript."""
+    from homeassistant.components.http import StaticPathConfig
+
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(CARD_URL, str(CARD_FRONTEND_PATH), True)]
+    )
 
 
 def _register_services(hass: Any, manager: Any) -> None:

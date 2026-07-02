@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "time_since_that"
 NAME = "Time Since That"
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 CONF_CHORES = "chores"
 CONF_CHORE_ID = "chore_id"
