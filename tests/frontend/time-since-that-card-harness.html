@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Time Since That Card Harness</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <script>
+      customElements.define(
+        "ha-card",
+        class extends HTMLElement {
+          constructor() {
+            super();
+            this.attachShadow({ mode: "open" }).append(document.createElement("slot"));
+          }
+        },
+      );
+    </script>
+    <script src="../../custom_components/time_since_that/frontend/time-since-that-card.js"></script>
+    <time-since-that-card id="card"></time-since-that-card>
+    <script>
+      const calls = [];
+      const card = document.querySelector("#card");
+      card.setConfig({ title: "Household" });
+      card.hass = {
+        states: {
+          "sensor.time_since_that_take_bins_out": {
+            state: "7 days since",
+            attributes: {
+              chore_id: "take_bins_out",
+              friendly_chore_name: "Take bins out",
+              elapsed_value: 7,
+              over_recommended: true,
+              over_by: "3 days",
+            },
+          },
+          "sensor.time_since_that_refill_humidifier": {
+            state: "12 hours since",
+            attributes: {
+              chore_id: "refill_humidifier",
+              friendly_chore_name: "Refill humidifier",
+              elapsed_value: 12,
+              over_recommended: false,
+            },
+          },
+          "sensor.time_since_that_scoop_cat_litter": {
+            state: "2 days since",
+            attributes: {
+              chore_id: "scoop_cat_litter",
+              friendly_chore_name: "Scoop cat litter",
+              elapsed_value: 2,
+              over_recommended: false,
+            },
+          },
+          "sensor.unrelated": {
+            state: "ignored",
+            attributes: {},
+          },
+        },
+        callService: async (...args) => calls.push(args),
+      };
+
+      window.cardHarness = {
+        card,
+        calls,
+        names: () =>
+          [...card.shadowRoot.querySelectorAll(".item__name")].map(
+            (element) => element.textContent,
+          ),
+        pressFirst: async () => {
+          card.shadowRoot.querySelector(".mark-button").click();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          return calls;
+        },
+      };
+    </script>
+  </body>
+</html>

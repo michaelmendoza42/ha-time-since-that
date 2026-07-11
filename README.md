@@ -217,8 +217,16 @@ Then add a manual card:
 ```yaml
 type: custom:time-since-that-card
 title: Time Since That
+```
+
+With no `entities` list, the card automatically discovers all `sensor.time_since_that_*` entities, shows overdue items first, then sorts the remaining items by longest elapsed time. Adding a new YAML item and restarting Home Assistant makes it appear automatically.
+
+The `entities` list remains optional when you want to show only a curated subset:
+
+```yaml
+type: custom:time-since-that-card
+title: Upstairs tasks
 entities:
-  - sensor.time_since_that_scoop_cat_litter
   - sensor.time_since_that_refill_humidifier
 ```
 

@@ -1,185 +1,233 @@
 class TimeSinceThatCard extends HTMLElement {
-  constructor() {
-    super();
-    this.attachShadow({ mode: "open" });
-    this._config = { entities: [] };
-    this._hass = undefined;
-    this._pendingEntityId = undefined;
-    this._error = undefined;
-  }
+	constructor() {
+		super();
+		this.attachShadow({ mode: "open" });
+		this._config = { entities: [] };
+		this._hass = undefined;
+		this._pendingEntityId = undefined;
+		this._error = undefined;
+	}
 
-  setConfig(config) {
-    if (!config || !Array.isArray(config.entities) || config.entities.length === 0) {
-      throw new Error("Time Since That card requires a non-empty entities array.");
-    }
+	setConfig(config) {
+		if (!config) {
+			throw new Error("Time Since That card needs a configuration object.");
+		}
+		if (config.entities !== undefined && !Array.isArray(config.entities)) {
+			throw new Error("The optional entities value must be an array.");
+		}
 
-    this._config = {
-      title: "Time Since That",
-      ...config,
-      entities: config.entities.map((entry) =>
-        typeof entry === "string" ? { entity: entry } : entry,
-      ),
-    };
-    this._render();
-  }
+		this._config = {
+			title: "Time Since That",
+			...config,
+			entities: config.entities?.map((entry) =>
+				typeof entry === "string" ? { entity: entry } : entry,
+			),
+		};
+		this._render();
+	}
 
-  set hass(hass) {
-    this._hass = hass;
-    this._render();
-  }
+	set hass(hass) {
+		this._hass = hass;
+		this._render();
+	}
 
-  getCardSize() {
-    return Math.max(3, this._config.entities.length * 2);
-  }
+	getCardSize() {
+		return Math.max(3, this._entries().length * 2);
+	}
 
-  static getStubConfig() {
-    return {
-      title: "Time Since That",
-      entities: ["sensor.time_since_that_scoop_cat_litter"],
-    };
-  }
+	static getStubConfig() {
+		return { title: "Time Since That" };
+	}
 
-  async _markDone(entityId) {
-    if (!this._hass || this._pendingEntityId) {
-      return;
-    }
+	_entries() {
+		if (this._config.entities) {
+			return this._config.entities;
+		}
 
-    this._pendingEntityId = entityId;
-    this._error = undefined;
-    this._render();
+		return Object.entries(this._hass?.states || {})
+			.filter(
+				([entityId, stateObj]) =>
+					entityId.startsWith("sensor.time_since_that_") &&
+					Boolean(stateObj.attributes?.chore_id),
+			)
+			.map(([entity]) => ({ entity }))
+			.sort((left, right) => {
+				const leftState = this._hass.states[left.entity];
+				const rightState = this._hass.states[right.entity];
+				const overdueDelta =
+					Number(rightState.attributes.over_recommended === true) -
+					Number(leftState.attributes.over_recommended === true);
+				if (overdueDelta) {
+					return overdueDelta;
+				}
+				const elapsedDelta =
+					Number(rightState.attributes.elapsed_value || 0) -
+					Number(leftState.attributes.elapsed_value || 0);
+				if (elapsedDelta) {
+					return elapsedDelta;
+				}
+				return String(
+					leftState.attributes.friendly_chore_name || left.entity,
+				).localeCompare(
+					String(rightState.attributes.friendly_chore_name || right.entity),
+				);
+			});
+	}
 
-    try {
-      await this._hass.callService("time_since_that", "mark_done", {
-        entity_id: entityId,
-      });
-    } catch (error) {
-      this._error = error?.message || "Could not mark item done.";
-    } finally {
-      this._pendingEntityId = undefined;
-      this._render();
-    }
-  }
+	async _markDone(entityId) {
+		if (!this._hass || this._pendingEntityId) {
+			return;
+		}
 
-  _render() {
-    if (!this.shadowRoot || !this._config) {
-      return;
-    }
+		this._pendingEntityId = entityId;
+		this._error = undefined;
+		this._render();
 
-    const style = document.createElement("style");
-    style.textContent = CARD_STYLES;
+		try {
+			await this._hass.callService("time_since_that", "mark_done", {
+				entity_id: entityId,
+			});
+		} catch (error) {
+			this._error = error?.message || "Could not mark item done.";
+		} finally {
+			this._pendingEntityId = undefined;
+			this._render();
+		}
+	}
 
-    const card = document.createElement("ha-card");
-    const wrap = this._element("div", "card-wrap");
-    const header = this._element("header", "card-header");
-    const headerText = document.createElement("div");
-    const title = this._element("h2", "", this._config.title || "Time Since That");
-    const subtitle = this._element(
-      "p",
-      "subtitle",
-      this._config.entities.length
-        ? "Press a row button when something is done."
-        : "No entities configured.",
-    );
+	_render() {
+		if (!this.shadowRoot || !this._config) {
+			return;
+		}
 
-    headerText.append(title, subtitle);
-    header.append(headerText);
+		const style = document.createElement("style");
+		style.textContent = CARD_STYLES;
 
-    const items = this._element("div", "items");
-    for (const entry of this._config.entities) {
-      items.append(this._renderRow(entry));
-    }
+		const card = document.createElement("ha-card");
+		const wrap = this._element("div", "card-wrap");
+		const header = this._element("header", "card-header");
+		const headerText = document.createElement("div");
+		const title = this._element(
+			"h2",
+			"",
+			this._config.title || "Time Since That",
+		);
+		const entries = this._entries();
+		const subtitle = this._element(
+			"p",
+			"subtitle",
+			entries.length
+				? "Press a row button when something is done."
+				: "No tracked Time Since That items found.",
+		);
 
-    wrap.append(header, items);
+		headerText.append(title, subtitle);
+		header.append(headerText);
 
-    if (this._error) {
-      const error = this._element("p", "card-error", this._error);
-      error.setAttribute("role", "alert");
-      wrap.append(error);
-    }
+		const items = this._element("div", "items");
+		for (const entry of entries) {
+			items.append(this._renderRow(entry));
+		}
 
-    card.append(wrap);
-    this.shadowRoot.replaceChildren(style, card);
-  }
+		wrap.append(header, items);
 
-  _renderRow(entry) {
-    const entityId = entry.entity;
-    const stateObj = this._hass?.states?.[entityId];
-    const row = this._element("article", "item");
+		if (this._error) {
+			const error = this._element("p", "card-error", this._error);
+			error.setAttribute("role", "alert");
+			wrap.append(error);
+		}
 
-    if (!stateObj) {
-      row.classList.add("missing");
-      const text = document.createElement("div");
-      text.append(
-        this._element("p", "item__name", entry.name || entityId || "Missing entity"),
-        this._element("p", "subtitle", "Entity not found."),
-      );
-      row.append(text);
-      return row;
-    }
+		card.append(wrap);
+		this.shadowRoot.replaceChildren(style, card);
+	}
 
-    const attributes = stateObj.attributes || {};
-    const name = entry.name || attributes.friendly_chore_name || attributes.friendly_name || entityId;
-    const state = stateObj.state || "unknown";
-    const text = document.createElement("div");
-    text.append(
-      this._element("p", "item__name", name),
-      this._element("p", "item__state", state),
-      this._metaPills(attributes),
-    );
+	_renderRow(entry) {
+		const entityId = entry.entity;
+		const stateObj = this._hass?.states?.[entityId];
+		const row = this._element("article", "item");
 
-    const button = this._element(
-      "button",
-      "mark-button",
-      this._pendingEntityId === entityId ? "Saving" : "Mark done",
-    );
-    button.type = "button";
-    button.disabled = this._pendingEntityId === entityId;
-    button.addEventListener("click", () => this._markDone(entityId));
+		if (!stateObj) {
+			row.classList.add("missing");
+			const text = document.createElement("div");
+			text.append(
+				this._element(
+					"p",
+					"item__name",
+					entry.name || entityId || "Missing entity",
+				),
+				this._element("p", "subtitle", "Entity not found."),
+			);
+			row.append(text);
+			return row;
+		}
 
-    row.append(text, button);
-    return row;
-  }
+		const attributes = stateObj.attributes || {};
+		const name =
+			entry.name ||
+			attributes.friendly_chore_name ||
+			attributes.friendly_name ||
+			entityId;
+		const state = stateObj.state || "unknown";
+		const text = document.createElement("div");
+		text.append(
+			this._element("p", "item__name", name),
+			this._element("p", "item__state", state),
+			this._metaPills(attributes),
+		);
 
-  _metaPills(attributes) {
-    const meta = this._element("div", "meta");
+		const button = this._element(
+			"button",
+			"mark-button",
+			this._pendingEntityId === entityId ? "Saving" : "Mark done",
+		);
+		button.type = "button";
+		button.disabled = this._pendingEntityId === entityId;
+		button.addEventListener("click", () => this._markDone(entityId));
 
-    if (attributes.recommended_every) {
-      meta.append(this._pill(`Recommended ${attributes.recommended_every}`));
-    }
+		row.append(text, button);
+		return row;
+	}
 
-    if (attributes.over_recommended === true && attributes.over_by) {
-      meta.append(this._pill(`Overdue ${attributes.over_by}`, "pill--overdue"));
-    }
+	_metaPills(attributes) {
+		const meta = this._element("div", "meta");
 
-    if (attributes.completion_count !== undefined) {
-      meta.append(this._pill(`${attributes.completion_count} completions`));
-    }
+		if (attributes.recommended_every) {
+			meta.append(this._pill(`Recommended ${attributes.recommended_every}`));
+		}
 
-    if (attributes.last_done_by_name) {
-      meta.append(this._pill(`Last by ${attributes.last_done_by_name}`));
-    }
+		if (attributes.over_recommended === true && attributes.over_by) {
+			meta.append(this._pill(`Overdue ${attributes.over_by}`, "pill--overdue"));
+		}
 
-    return meta;
-  }
+		if (attributes.completion_count !== undefined) {
+			meta.append(this._pill(`${attributes.completion_count} completions`));
+		}
 
-  _pill(text, extraClass = "") {
-    const pill = this._element("span", "pill", text);
-    if (extraClass) {
-      pill.classList.add(extraClass);
-    }
-    return pill;
-  }
+		if (attributes.last_done_by_name) {
+			meta.append(this._pill(`Last by ${attributes.last_done_by_name}`));
+		}
 
-  _element(tagName, className = "", text = undefined) {
-    const element = document.createElement(tagName);
-    if (className) {
-      element.className = className;
-    }
-    if (text !== undefined) {
-      element.textContent = text;
-    }
-    return element;
-  }
+		return meta;
+	}
+
+	_pill(text, extraClass = "") {
+		const pill = this._element("span", "pill", text);
+		if (extraClass) {
+			pill.classList.add(extraClass);
+		}
+		return pill;
+	}
+
+	_element(tagName, className = "", text = undefined) {
+		const element = document.createElement(tagName);
+		if (className) {
+			element.className = className;
+		}
+		if (text !== undefined) {
+			element.textContent = text;
+		}
+		return element;
+	}
 }
 
 const CARD_STYLES = `
@@ -321,12 +369,12 @@ const CARD_STYLES = `
 `;
 
 if (!customElements.get("time-since-that-card")) {
-  customElements.define("time-since-that-card", TimeSinceThatCard);
+	customElements.define("time-since-that-card", TimeSinceThatCard);
 }
 
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: "time-since-that-card",
-  name: "Time Since That Card",
-  description: "Show Time Since That sensors with inline mark-done buttons.",
+	type: "time-since-that-card",
+	name: "Time Since That Card",
+	description: "Show Time Since That sensors with inline mark-done buttons.",
 });
