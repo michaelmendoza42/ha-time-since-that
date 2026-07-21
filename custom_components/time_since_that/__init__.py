@@ -107,14 +107,15 @@ async def _async_register_frontend(hass: Any) -> None:
     """Serve and automatically load the bundled Lovelace card."""
     from homeassistant.components.frontend import add_extra_js_url
 
+    # Keep cache headers disabled: HACS updates reuse this fixed frontend URL.
     if hasattr(hass.http, "async_register_static_paths"):
         from homeassistant.components.http import StaticPathConfig
 
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(CARD_URL, str(CARD_FRONTEND_PATH), True)]
+            [StaticPathConfig(CARD_URL, str(CARD_FRONTEND_PATH), False)]
         )
     else:  # Home Assistant 2024.6 compatibility
-        hass.http.register_static_path(CARD_URL, str(CARD_FRONTEND_PATH), True)
+        hass.http.register_static_path(CARD_URL, str(CARD_FRONTEND_PATH), False)
 
     add_extra_js_url(hass, CARD_JS_URL)
 

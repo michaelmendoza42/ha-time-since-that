@@ -7,7 +7,7 @@ mark_done:
   fields:
     chore_id:
       name: Item ID
-      description: Stable item id from YAML. Use this if not targeting a Time Since That entity.
+      description: Stable item ID from Time Since That configuration. Use this if not targeting an entity.
       required: false
       selector:
         text:

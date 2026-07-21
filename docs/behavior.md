@@ -1,55 +1,51 @@
 # Time Since That behavior
 
-Time Since That is a YAML-configured Home Assistant custom integration for household chore freshness tracking.
+Time Since That is a Home Assistant config-entry integration for household freshness tracking.
+
+## Reset boundary
+
+Version 1 uses UI-managed chore definitions. It deliberately does not import or alter the early YAML configuration/history model. Existing YAML and legacy history stay untouched as backup data; users create their desired chores in the integration UI.
 
 ## Core concepts
 
-- **Chore definition**: static YAML metadata such as `id`, `name`, `category`, `area`, `recommended_every`, and `elapsed_display`.
-- **Completion event**: one timestamped household event recorded when someone marks a chore done.
-- **Freshness**: how long it has been since the most recent completion event.
-- **Recommended cadence**: optional guidance for how often the chore should usually happen. It is not a scheduler.
-- **Elapsed display**: how freshness and interval values are rounded and displayed to humans. Internal tracking always stores exact timestamps.
-- **Household stats**: v1 calculates stats across all completion events for the chore. Per-user stats are intentionally deferred.
+- **Chore definition**: UI-managed metadata: immutable internal ID, name, optional category/area/tags, recommended cadence, and elapsed display.
+- **Completion event**: a timestamped event recorded by the service, generated button, inline card action, initial last-completed input, or explicit correction.
+- **Initial completion**: an optional past date/time supplied when creating a chore. It creates one event with source `initial`.
+- **Last-completed correction**: an explicit action that changes only the latest completion timestamp, preserving that event's identity and attribution. For a never-completed chore, it creates one initial event instead. It recalculates freshness and interval statistics.
+- **Freshness**: time since the latest completion event.
+- **Recommended cadence**: optional guidance, not a scheduler.
+- **Tags**: normalized lowercase labels used by aggregate card filters. Category is separate metadata.
 
-## YAML contract
+## UI management
 
-```yaml
-time_since_that:
-  chores:
-    - id: scoop_cat_litter
-      name: Scoop cat litter
-      category: pets
-      area: Bathroom
-      recommended_every:
-        value: 2
-        unit: days
-      elapsed_display:
-        unit: days
-        rounding: floor
-```
+Use **Settings → Devices & services → Time Since That → Configure** to add, edit, adjust, or remove chores.
 
-### Fields
-
-- `id` is required and should be stable lowercase `snake_case`. Changing it creates a new chore identity.
-- `name` is required.
-- `category` and `area` are optional strings exposed as sensor attributes for dashboards and future filtering.
-- `recommended_every` is optional and supports `minutes`, `hours`, or `days`.
-- `elapsed_display` is optional and defaults to `unit: days` and `rounding: floor`.
-
-### Rounding
-
-Supported rounding modes are `floor`, `ceil`, and `nearest`. Rounding affects display state and attributes only; stored timestamps and stats are exact.
+- Chore IDs are derived at creation and remain immutable after rename.
+- A last-completed value must be a valid past date/time.
+- Removing a chore removes its active entities after confirmation. V1 history is retained, but there is no restore UI in this release.
 
 ## State and history
 
-Each configured chore exposes a freshness sensor and a mark-done button entity. Pressing the button records a completion event for that chore.
+Each active chore exposes a freshness sensor and a mark-done button entity.
 
-The bundled Lovelace card is a dashboard-only convenience layer. Without an explicit entity list, it discovers all Time Since That sensor entities and sorts overdue items first. It reads sensor state/attributes and calls the same mark-done service; it does not store separate state.
+The v1 history repository uses its own storage namespace and retains event buckets for removed chores. It never reads, writes, imports, or deletes the legacy YAML-era history stores.
 
-Completion history is stored locally in Home Assistant `.storage` using a versioned storage key. The integration stores timestamp, source, Home Assistant context IDs, and user attribution when Home Assistant provides a user context.
+Full event history is not exposed as sensor attributes to avoid Recorder bloat.
 
-Full event history is not exposed as sensor attributes to avoid recorder bloat.
+## Dashboard card
 
-## Removed chores
+The bundled card is registered automatically by the integration.
 
-Removing a chore from YAML stops exposing an entity for that chore, but v1 does not intentionally delete stored history. Re-adding the same `id` can reuse the stored history.
+- **All chores mode** discovers active Time Since That sensors, sorts overdue first, and offers card-local tag filtering.
+- **One chore mode** displays a selected sensor with one inline Mark done action.
+- Filter selection is ephemeral per card view; it does not change chore definitions.
+
+### Tag filter contract
+
+- `All` is a synthetic aggregate control, not a stored tag.
+- A selected `All` represents every available real tag plus `No tag` when untagged chores exist.
+- Deselecting selected `All` clears every filter and displays no chores.
+- Deselecting an individual filter when All is selected removes only that filter and makes All mixed.
+- Re-selecting the final missing filter restores All.
+- Multiple selected tags use OR matching.
+- `No tag` matches only chores with an empty tags list.

@@ -230,17 +230,27 @@ class TimeSinceThatOptionsFlow(OptionsFlowWithConfigEntry):
                 data_schema=_chore_selector_schema(_stored_chores(self.options)),
             )
 
+        errors: dict[str, str] = {}
         if user_input is not None:
-            chores = [
-                chore
-                for chore in _stored_chores(self.options)
-                if chore["id"] != self._selected_chore_id
-            ]
-            return self.async_create_entry(data={**self.options, CONF_CHORES: chores})
+            if not user_input["confirm"]:
+                errors["base"] = "removal_not_confirmed"
+            else:
+                await _async_remove_chore_entities(
+                    self.hass,
+                    self.config_entry.entry_id,
+                    self._selected_chore_id,
+                )
+                chores = [
+                    chore
+                    for chore in _stored_chores(self.options)
+                    if chore["id"] != self._selected_chore_id
+                ]
+                return self.async_create_entry(data={**self.options, CONF_CHORES: chores})
 
         return self.async_show_form(
             step_id=MENU_REMOVE,
             data_schema=vol.Schema({vol.Required("confirm", default=False): bool}),
+            errors=errors,
         )
 
 
@@ -370,6 +380,24 @@ def _stored_chores(options: dict[str, Any]) -> list[dict[str, Any]]:
 def _find_chore(chores: list[dict[str, Any]], chore_id: str) -> dict[str, Any] | None:
     """Find a stored chore by immutable ID."""
     return next((chore for chore in chores if chore["id"] == chore_id), None)
+
+
+async def _async_remove_chore_entities(
+    hass: HomeAssistant,
+    entry_id: str,
+    chore_id: str,
+) -> None:
+    """Remove stale registry rows when a UI chore is removed."""
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(hass)
+    unique_ids = {
+        f"time_since_that_{chore_id}",
+        f"time_since_that_{chore_id}_mark_done",
+    }
+    for entry in er.async_entries_for_config_entry(registry, entry_id):
+        if entry.unique_id in unique_ids:
+            registry.async_remove(entry.entity_id)
 
 
 def _replace_chore(

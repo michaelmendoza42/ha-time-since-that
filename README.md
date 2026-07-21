@@ -1,188 +1,120 @@
 # Time Since That
 
-Time Since That is a HACS-installable Home Assistant custom integration for answering one household question: **how long has it been since that thing was last done?**
+Time Since That is a HACS-installable Home Assistant integration for one question: **how long has it been since that thing was last done?**
 
-The current `0.3.0` implementation is chore-focused. You define tracked items in YAML, Home Assistant creates one sensor per item, and calling a service records a completion event. The sensor then shows freshness, recommended cadence status, and household-level interval stats.
+Create chores in Home Assistant, optionally seed their last-completed date/time, and place either an all-chores or single-chore card on a dashboard.
 
-## Integration names
+## Version 1 reset
 
-| Surface | Current value |
-| --- | --- |
-| HACS/integration display name | `Time Since That` |
-| Integration domain | `time_since_that` |
-| YAML root key | `time_since_that` |
-| Service | `time_since_that.mark_done` |
-| Example entity | `sensor.time_since_that_scoop_cat_litter` |
-| Storage key | `time_since_that.history` |
+Version `1.0.0` replaces the early YAML prototype with UI-managed chores.
 
-## Status
+Before updating from an earlier version:
 
-Early `0.3.0` implementation.
+1. Create a full Home Assistant backup.
+2. Keep your existing `time_since_that:` YAML and old history files as backup material.
+3. Update the integration and restart Home Assistant.
+4. Re-create the chores you want in the integration UI. Use **Last completed** to seed each starting state.
+5. Verify the new entities/cards, then remove the old YAML block.
 
-Implemented:
+This is intentionally **not a migration**: v1 does not import, modify, or delete the old YAML-era history stores.
 
-- YAML configuration for tracked chores/items.
-- One sensor entity per configured item.
-- One button entity per configured item for marking it done from dashboards.
-- A bundled custom Lovelace card for combined sensor display and mark-done actions.
-- A `time_since_that.mark_done` service.
-- Local Home Assistant storage for completion history.
-- User attribution when Home Assistant provides a service-call user context.
-- Elapsed freshness display, recommended cadence status, and household-level interval stats.
-- Minute-by-minute sensor refreshes so elapsed values continue to age.
-
-Deferred:
-
-- Config flow/options flow.
-- Per-user stats.
-- Automatic config generation or deployment behavior.
-
-## Installation
-
-### HACS custom repository
+## Install
 
 1. In HACS, add this repository as a custom repository with category **Integration**.
-2. Install **Time Since That**.
+2. Install or update **Time Since That**.
 3. Restart Home Assistant.
+4. Go to **Settings → Devices & services → Add integration → Time Since That**.
 
-### Manual install
+## Manage chores
 
-Copy `custom_components/time_since_that` into your Home Assistant config directory:
+Open **Settings → Devices & services → Time Since That → Configure**.
+
+Use the menu to:
+
+- **Add chore** — choose a name, optional category/area/tags/cadence, and optional initial last-completed date/time.
+- **Edit chore** — update display metadata, tags, cadence, and elapsed display.
+- **Adjust last completed** — correct the latest completion timestamp. This changes freshness and interval statistics, so it is deliberately separate from ordinary editing.
+- **Remove chore** — removes active entities after confirmation while retaining v1 history for safety.
+
+### Tags
+
+Tags are optional comma-separated labels in the chore form, such as:
 
 ```text
-/config/custom_components/time_since_that
+pets, daily
 ```
 
-Then restart Home Assistant.
+They are normalized to lowercase. `category` remains separate metadata; it is not automatically treated as a tag.
 
-## Configuration
+## Entities
 
-Add items to `configuration.yaml`:
-
-```yaml
-time_since_that:
-  chores:
-    - id: scoop_cat_litter
-      name: Scoop cat litter
-      category: pets
-      area: Bathroom
-      recommended_every:
-        value: 2
-        unit: days
-      elapsed_display:
-        unit: days
-        rounding: floor
-
-    - id: refill_humidifier
-      name: Refill humidifier
-      recommended_every:
-        value: 12
-        unit: hours
-      elapsed_display:
-        unit: hours
-        rounding: floor
-
-    - id: move_laundry
-      name: Move laundry
-      recommended_every:
-        value: 45
-        unit: minutes
-      elapsed_display:
-        unit: minutes
-        rounding: nearest
-```
-
-YAML changes require a Home Assistant restart in v1.
-
-### Generate the YAML with the included web app
-
-This repo includes a dependency-free browser helper at [`tools/yaml-generator/index.html`](tools/yaml-generator/index.html). Open it locally, add each task or chore in the form, then copy or download the generated `time_since_that.yaml`.
-
-For split-file configuration, add this to `configuration.yaml`:
-
-```yaml
-time_since_that: !include time_since_that.yaml
-```
-
-The generator output starts with `chores:`, so it is ready to save as the included `time_since_that.yaml` file.
-
-## Chore fields
-
-| Field | Required | Description |
-| --- | --- | --- |
-| `id` | yes | Stable lowercase `snake_case` id. Changing this creates a new tracked identity. |
-| `name` | yes | Human display name. |
-| `category` | no | Optional metadata exposed as a sensor attribute. |
-| `area` | no | Optional metadata exposed as a sensor attribute. This does not map to the Home Assistant Area Registry in v1. |
-| `recommended_every` | no | Optional recommended cadence with `value` and `unit`. This is guidance, not a scheduler. |
-| `elapsed_display` | no | Optional display unit and rounding for elapsed values. Defaults to `days`/`floor`. |
-
-Supported units: `minutes`, `hours`, `days`.
-
-Supported rounding: `floor`, `ceil`, `nearest`.
-
-## What Home Assistant creates
-
-Each configured item creates one sensor and one mark-done button, for example:
+Each chore creates:
 
 ```text
 sensor.time_since_that_scoop_cat_litter
 button.mark_scoop_cat_litter_done
 ```
 
-The button entity calls the same completion-recording path as the service, so you can add it directly to an Entities card or any dashboard card that can show button entities.
-
-Before the item has ever been marked done, the sensor state is:
-
-```text
-never
-```
-
-After it has history, the sensor state is human-readable:
-
-```text
-3 days since
-```
-
-Important attributes include:
+The sensor shows `never` until the first completion, then a state such as `3 days since`. Its attributes include:
 
 ```yaml
 chore_id: scoop_cat_litter
-friendly_chore_name: Scoop cat litter
-last_done_at: "2026-06-29T10:14:00-04:00"
-last_done_by_name: Example User
-last_done_by_user_id: user_abc123
+tags:
+  - pets
+  - daily
+last_done_at: "2026-07-20T10:30:00-04:00"
 completion_count: 18
 elapsed: "3 days"
-elapsed_value: 3
-elapsed_unit: days
-recommended_every: "2 days"
-recommended_every_value: 2
-recommended_every_unit: days
 over_recommended: true
 over_by: "1 day"
-over_by_value: 1
-average_interval: "2 days"
-average_interval_seconds: 207360
-median_interval: "2 days"
-median_interval_seconds: 181440
-shortest_interval: "1 day"
-longest_interval: "5 days"
-category: pets
-area: Bathroom
 ```
 
-Full completion history is stored locally but is not exposed as an entity attribute to avoid recorder bloat.
+The generated button and `time_since_that.mark_done` service both record a new completion event.
 
-## Marking something done
+## Dashboard cards
 
-The easiest path is to press the generated button entity:
+The integration automatically registers the custom card; you do **not** add a dashboard Resource URL manually.
 
-```text
-button.mark_scoop_cat_litter_done
+### All chores card
+
+Dashboard → Add card → **Time Since That Card**, then choose **All chores**.
+
+Equivalent YAML:
+
+```yaml
+type: custom:time-since-that-card
+title: Time Since That
 ```
 
-You can also use the canonical service action against a sensor or button entity:
+The card discovers active chores, shows overdue items first, and offers tag filters.
+
+### One chore per card
+
+Dashboard → Add card → **Time Since That Card**, choose **One chore**, then select the chore.
+
+Equivalent YAML:
+
+```yaml
+type: custom:time-since-that-card
+title: Cat litter
+entity: sensor.time_since_that_scoop_cat_litter
+```
+
+The card displays that chore plus an inline **Mark done** action.
+
+### Tag filters
+
+Aggregate cards show `All`, every real tag, and `No tag` when needed.
+
+- Initially, **All** is selected.
+- Select one or more tags to show chores with **any** selected tag.
+- Select **No tag** to show untagged chores.
+- Tap selected **All** to deselect every filter and show no chores.
+- When All is selected, deselecting one tag soft-deselects All while keeping other filters selected.
+
+## Service
+
+Automations can mark a chore done by entity:
 
 ```yaml
 service: time_since_that.mark_done
@@ -190,7 +122,7 @@ target:
   entity_id: sensor.time_since_that_scoop_cat_litter
 ```
 
-Or call it by configured id:
+Or by the immutable chore ID:
 
 ```yaml
 service: time_since_that.mark_done
@@ -198,135 +130,24 @@ data:
   chore_id: scoop_cat_litter
 ```
 
-The service records a completion event with timestamp, source, Home Assistant context IDs, and user attribution when Home Assistant provides a user context.
-
-## Example card and flow
-
-The integration bundles a custom Lovelace card that combines each sensor readout with a mark-done button.
-
-Add this dashboard resource after installing/restarting the integration:
-
-```text
-/time_since_that/time-since-that-card.js
-```
-
-Use resource type **JavaScript module**.
-
-Then add a manual card:
-
-```yaml
-type: custom:time-since-that-card
-title: Time Since That
-```
-
-With no `entities` list, the card automatically discovers all `sensor.time_since_that_*` entities, shows overdue items first, then sorts the remaining items by longest elapsed time. Adding a new YAML item and restarting Home Assistant makes it appear automatically.
-
-The `entities` list remains optional when you want to show only a curated subset:
-
-```yaml
-type: custom:time-since-that-card
-title: Upstairs tasks
-entities:
-  - sensor.time_since_that_refill_humidifier
-```
-
-The card reads each sensor's state and attributes, then calls `time_since_that.mark_done` when you press **Mark done**.
-
-A simple dashboard concept can look like this:
-
-```text
-┌──────────────────────────────────────────────┐
-│ TIME SINCE THAT                              │
-├──────────────────────────────────────────────┤
-│ 🐾 Scoop cat litter                          │
-│                                              │
-│ 3 days since                                 │
-│ Recommended: every 2 days                    │
-│ Status: overdue by 1 day                     │
-│ Last done by: Example User                   │
-│                                              │
-│ [ Mark done ]                                │
-└──────────────────────────────────────────────┘
-```
-
-The current Home Assistant flow behind that card is:
-
-```text
-configuration.yaml
-  time_since_that.chores[]
-        │
-        ▼
-Home Assistant startup validates YAML
-        │
-        ▼
-Creates sensor.time_since_that_<id>
-and button.mark_<id>_done
-        │
-        ▼
-Dashboard card shows sensor state + inline action
-        │
-        ▼
-User presses Mark done
-        │
-        ▼
-Records completion event
-        │
-        ▼
-Completion event saved to .storage
-        │
-        ▼
-Sensor refreshes state and stats
-```
-
-You can still use the generated button entities without the custom card:
-
-```yaml
-type: entities
-title: Time Since That
-entities:
-  - entity: sensor.time_since_that_scoop_cat_litter
-    name: Scoop cat litter
-  - entity: button.mark_scoop_cat_litter_done
-    name: Mark done
-```
-
-Example entity card to show only the resulting sensor:
-
-```yaml
-type: entity
-entity: sensor.time_since_that_scoop_cat_litter
-name: Scoop cat litter
-attribute: elapsed
-```
-
-## Product behavior
-
-See [`docs/behavior.md`](docs/behavior.md) for the v1 behavior contract.
-
 ## Privacy
 
-Time Since That stores completion history locally in Home Assistant storage. It makes no network calls and requires no secrets.
+Time Since That stores its v1 completion history locally in Home Assistant. It makes no network calls and requires no secrets.
 
-This repository is public/shareable. Do not commit machine-specific deployment notes, local Home Assistant access details, server names, credentials, tokens, or AI-agent working context. Keep local deployment notes in a gitignored `LOCAL.md`.
+This repository is public/shareable. Do not commit machine-specific deployment notes, access details, credentials, tokens, or AI-agent working context.
 
-## License
+## Legacy YAML generator
 
-Apache-2.0.
+[`tools/yaml-generator/index.html`](tools/yaml-generator/index.html) remains available as a reference/drafting tool for the retired YAML prototype. It is not used by v1 runtime configuration.
 
 ## Development
-
-Run the local pure-Python tests:
 
 ```sh
 python3 -m unittest discover -s tests
 ```
 
-Home Assistant validation still requires a Home Assistant development/test environment with the integration dependencies installed. Release readiness should include HACS validation and hassfest.
+Home Assistant config-flow validation requires a Home Assistant-compatible test environment. Browser-observable card behavior is exercised by the frontend harnesses in `tests/frontend/`.
 
-## Limitations in v1
+## License
 
-- YAML configuration only; no config flow/options flow yet.
-- No dedicated stats screen yet.
-- Household-level stats only; per-user stats are stored for future use but not calculated/exposed.
-- YAML changes require restart.
-- No automatic config generation, restart, or deployment behavior.
+Apache-2.0.

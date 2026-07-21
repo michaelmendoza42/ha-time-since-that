@@ -1,5 +1,101 @@
 {
   "title": "Time Since That",
+  "config": {
+    "abort": {
+      "single_instance_allowed": "Only one Time Since That household can be configured."
+    },
+    "step": {
+      "user": {
+        "title": "Create your first chore",
+        "description": "You can add more chores later from Configure.",
+        "data": {
+          "name": "Name",
+          "category": "Category",
+          "area": "Area",
+          "tags": "Tags (comma-separated)",
+          "recommended_value": "Recommended every",
+          "recommended_unit": "Recommended unit",
+          "unit": "Elapsed display unit",
+          "rounding": "Elapsed display rounding",
+          "last_completed": "Last completed (optional)"
+        }
+      }
+    },
+    "error": {
+      "invalid_chore": "Check the chore name, tags, and cadence.",
+      "invalid_last_completed": "Choose a valid past date and time."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "menu_options": {
+          "add": "Add chore",
+          "edit": "Edit chore",
+          "adjust_last_completed": "Adjust last completed",
+          "remove": "Remove chore"
+        }
+      },
+      "add": {
+        "title": "Add chore",
+        "data": {
+          "name": "Name",
+          "category": "Category",
+          "area": "Area",
+          "tags": "Tags (comma-separated)",
+          "recommended_value": "Recommended every",
+          "recommended_unit": "Recommended unit",
+          "unit": "Elapsed display unit",
+          "rounding": "Elapsed display rounding",
+          "last_completed": "Last completed (optional)"
+        }
+      },
+      "edit_select": {
+        "title": "Choose a chore",
+        "data": { "selected_chore": "Chore" }
+      },
+      "edit": {
+        "title": "Edit chore",
+        "data": {
+          "name": "Name",
+          "category": "Category",
+          "area": "Area",
+          "tags": "Tags (comma-separated)",
+          "recommended_value": "Recommended every",
+          "recommended_unit": "Recommended unit",
+          "unit": "Elapsed display unit",
+          "rounding": "Elapsed display rounding"
+        }
+      },
+      "adjust_select": {
+        "title": "Choose a chore",
+        "data": { "selected_chore": "Chore" }
+      },
+      "adjust_last_completed": {
+        "title": "Adjust last completed",
+        "description": "This changes freshness and interval statistics.",
+        "data": { "last_completed": "Last completed" }
+      },
+      "remove_select": {
+        "title": "Choose a chore",
+        "data": { "selected_chore": "Chore" }
+      },
+      "remove": {
+        "title": "Remove chore",
+        "description": "The chore's active entities will be removed. V1 history is retained.",
+        "data": { "confirm": "I understand" }
+      }
+    },
+    "error": {
+      "invalid_chore": "Check the chore name, tags, and cadence.",
+      "invalid_last_completed": "Choose a valid past date and time.",
+      "removal_not_confirmed": "Confirm removal to continue."
+    },
+    "abort": {
+      "chore_not_found": "That chore no longer exists.",
+      "not_configured": "Time Since That is not configured."
+    }
+  },
   "services": {
     "mark_done": {
       "name": "Mark item done",
@@ -7,7 +103,7 @@
       "fields": {
         "chore_id": {
           "name": "Item ID",
-          "description": "Stable item id from YAML. Use this if not targeting a Time Since That entity."
+          "description": "Stable item ID from Time Since That configuration."
         }
       }
     }

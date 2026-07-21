@@ -52,7 +52,7 @@ class ElapsedDisplay:
 
 @dataclass(frozen=True, slots=True)
 class ChoreDefinition:
-    """Static YAML-defined chore metadata."""
+    """Static UI-managed chore metadata."""
 
     id: str
     name: str
@@ -151,7 +151,7 @@ def validate_chore_definitions(definitions: list[ChoreDefinition]) -> list[Chore
 
 
 def definition_from_dict(data: dict[str, Any]) -> ChoreDefinition:
-    """Build a normalized chore definition from a config dictionary."""
+    """Build a normalized chore definition from a stored config dictionary."""
     recommended = data.get("recommended_every")
     display = data.get("elapsed_display") or {}
     definition = ChoreDefinition(
