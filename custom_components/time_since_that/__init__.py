@@ -1,62 +1,129 @@
 # pyright: reportMissingImports=false, reportMissingModuleSource=false
-"""Home Assistant setup for Time Since That."""
+"""Home Assistant setup for the UI-managed Time Since That integration."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .const import CONF_CHORE_ID, CONF_CHORES, DATA_MANAGER, DOMAIN, SERVICE_MARK_DONE
-from .model import definition_from_dict
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
+from .const import (
+    CONF_CHORE_ID,
+    CONF_CHORES,
+    CONF_LAST_COMPLETED,
+    DATA_MANAGER,
+    DOMAIN,
+    SERVICE_MARK_DONE,
+    SOURCE_INITIAL,
+)
+from .model import definition_from_dict, parse_datetime, validate_chore_definitions
 
 PLATFORMS = ("sensor", "button")
+CARD_FRONTEND_PATH = Path(__file__).parent / "frontend"
+CARD_URL = f"/{DOMAIN}"
+CARD_JS_URL = f"{CARD_URL}/time-since-that-card.js"
+DATA_FRONTEND_REGISTERED = "frontend_registered"
+
+_LOGGER = logging.getLogger(__name__)
 
 try:
     from .config_schema import CONFIG_SCHEMA
 except ModuleNotFoundError:  # pragma: no cover - Home Assistant deps absent in pure tests
     CONFIG_SCHEMA = None  # type: ignore[assignment]
 
-_LOGGER = logging.getLogger(__name__)
-
-CARD_FRONTEND_PATH = Path(__file__).parent / "frontend"
-CARD_URL = f"/{DOMAIN}"
-
 
 async def async_setup(hass: Any, config: dict[str, Any]) -> bool:
-    """Set up Time Since That from YAML."""
-    from homeassistant.helpers import discovery
+    """Register domain-wide services and the bundled Lovelace card.
 
-    from .manager import TimeSinceThatManager
+    The temporary schema accepts an old YAML root but never reads it. This is a
+    clean reset, not a migration path.
+    """
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if DOMAIN in config:
+        _LOGGER.warning(
+            "Ignoring legacy YAML configuration for %s; manage chores through "
+            "Settings > Devices & services instead.",
+            DOMAIN,
+        )
 
-    if DOMAIN not in config:
-        return True
-
-    chore_config = config[DOMAIN][CONF_CHORES]
-    definitions = [definition_from_dict(item) for item in chore_config]
-    manager = TimeSinceThatManager(hass, definitions)
-    await manager.async_load()
-
-    hass.data.setdefault(DOMAIN, {})[DATA_MANAGER] = manager
-    _register_services(hass, manager)
-    await _register_frontend(hass)
-
-    for platform in PLATFORMS:
-        await discovery.async_load_platform(hass, platform, DOMAIN, {}, config)
+    _register_services(hass)
+    if not domain_data.get(DATA_FRONTEND_REGISTERED):
+        await _async_register_frontend(hass)
+        domain_data[DATA_FRONTEND_REGISTERED] = True
     return True
 
 
-async def _register_frontend(hass: Any) -> None:
-    """Serve the bundled Lovelace card JavaScript."""
-    from homeassistant.components.http import StaticPathConfig
+async def async_setup_entry(hass: Any, entry: Any) -> bool:
+    """Set up one UI-managed household config entry."""
+    from .manager import TimeSinceThatHistoryRepository, TimeSinceThatManager
 
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(CARD_URL, str(CARD_FRONTEND_PATH), True)]
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    history = TimeSinceThatHistoryRepository(hass)
+    await history.async_load()
+
+    raw_chores = entry.options.get(CONF_CHORES, [])
+    definitions = validate_chore_definitions(
+        [definition_from_dict(chore) for chore in raw_chores]
     )
+    manager = TimeSinceThatManager(hass, definitions, history)
+    for raw_chore in raw_chores:
+        initial_value = raw_chore.get(CONF_LAST_COMPLETED)
+        chore_id = str(raw_chore["id"])
+        if initial_value and not history.events_for(chore_id):
+            await manager.async_mark_done(
+                chore_id,
+                source=SOURCE_INITIAL,
+                done_at=parse_datetime(str(initial_value)),
+            )
+
+    domain_data[DATA_MANAGER] = manager
+    domain_data[entry.entry_id] = manager
+
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    return True
 
 
-def _register_services(hass: Any, manager: Any) -> None:
-    """Register Time Since That services."""
+async def async_unload_entry(hass: Any, entry: Any) -> bool:
+    """Unload platforms and entry-specific runtime state."""
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        domain_data = hass.data.get(DOMAIN, {})
+        domain_data.pop(entry.entry_id, None)
+        domain_data.pop(DATA_MANAGER, None)
+    return unload_ok
+
+
+async def _async_update_listener(hass: Any, entry: Any) -> None:
+    """Reload entities after chore options change."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def _async_register_frontend(hass: Any) -> None:
+    """Serve and automatically load the bundled Lovelace card."""
+    from homeassistant.components.frontend import add_extra_js_url
+
+    if hasattr(hass.http, "async_register_static_paths"):
+        from homeassistant.components.http import StaticPathConfig
+
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(CARD_URL, str(CARD_FRONTEND_PATH), True)]
+        )
+    else:  # Home Assistant 2024.6 compatibility
+        hass.http.register_static_path(CARD_URL, str(CARD_FRONTEND_PATH), True)
+
+    add_extra_js_url(hass, CARD_JS_URL)
+
+
+def _register_services(hass: Any) -> None:
+    """Register the domain service once; resolve the live entry manager per call."""
+    if hass.services.has_service(DOMAIN, SERVICE_MARK_DONE):
+        return
+
     import voluptuous as vol
     from homeassistant.const import ATTR_ENTITY_ID
     from homeassistant.helpers import config_validation as cv
@@ -69,6 +136,9 @@ def _register_services(hass: Any, manager: Any) -> None:
     )
 
     async def async_mark_done(call: Any) -> None:
+        manager = hass.data.get(DOMAIN, {}).get(DATA_MANAGER)
+        if manager is None:
+            raise vol.Invalid("Time Since That is not configured.")
         for chore_id in _chore_ids_from_call(call.data, manager):
             await manager.async_mark_done(chore_id, call.context, source="service")
 
@@ -80,8 +150,8 @@ def _register_services(hass: Any, manager: Any) -> None:
     )
 
 
-def _chore_ids_from_call(data: dict[str, Any], manager: Any) -> list[str]:
-    """Resolve one or more chore ids from service data."""
+def _chore_ids_from_call(data: dict[str, Any], manager: Any) -> list[str]: 
+    """Resolve one or more chore IDs from service data."""
     import voluptuous as vol
     from homeassistant.const import ATTR_ENTITY_ID
 
@@ -103,4 +173,4 @@ def _chore_ids_from_call(data: dict[str, Any], manager: Any) -> list[str]:
     raise vol.Invalid(f"Provide either {CONF_CHORE_ID} or {ATTR_ENTITY_ID}.")
 
 
-__all__ = ["CONFIG_SCHEMA", "async_setup"]
+__all__ = ["CONFIG_SCHEMA", "async_setup", "async_setup_entry", "async_unload_entry"]

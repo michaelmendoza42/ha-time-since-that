@@ -4,9 +4,11 @@ from __future__ import annotations
 
 DOMAIN = "time_since_that"
 NAME = "Time Since That"
-VERSION = "0.3.0"
+VERSION = "1.0.0"
 
 CONF_CHORES = "chores"
+CONF_TAGS = "tags"
+CONF_LAST_COMPLETED = "last_completed"
 CONF_CHORE_ID = "chore_id"
 CONF_NAME = "name"
 CONF_CATEGORY = "category"
@@ -18,6 +20,7 @@ CONF_UNIT = "unit"
 CONF_ROUNDING = "rounding"
 
 ATTR_CHORE_ID = "chore_id"
+ATTR_TAGS = "tags"
 ATTR_FRIENDLY_CHORE_NAME = "friendly_chore_name"
 ATTR_LAST_DONE_AT = "last_done_at"
 ATTR_LAST_DONE_BY_NAME = "last_done_by_name"
@@ -45,11 +48,13 @@ SERVICE_MARK_DONE = "mark_done"
 
 SOURCE_SERVICE = "service"
 SOURCE_BUTTON = "button"
+SOURCE_INITIAL = "initial"
 
 UNITS = ("minutes", "hours", "days")
 ROUNDING_MODES = ("floor", "ceil", "nearest")
 DEFAULT_DISPLAY_UNIT = "days"
 DEFAULT_DISPLAY_ROUNDING = "floor"
 
-STORAGE_KEY = f"{DOMAIN}.history"
+# v1 deliberately uses a new namespace; legacy YAML/history is not migrated.
+STORAGE_KEY = f"{DOMAIN}.v1_history"
 STORAGE_VERSION = 1

@@ -4,21 +4,20 @@
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from .const import DATA_MANAGER, DOMAIN, SOURCE_BUTTON
 from .manager import TimeSinceThatManager
 
 
-async def async_setup_platform(
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
+    entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
-    """Set up Time Since That mark-done buttons from YAML."""
+    """Set up Time Since That mark-done buttons from one config entry."""
     manager: TimeSinceThatManager = hass.data[DOMAIN][DATA_MANAGER]
     async_add_entities(
         MarkDoneButton(manager, chore_id) for chore_id in manager.chore_ids
@@ -43,6 +42,11 @@ class MarkDoneButton(ButtonEntity):
         """Register this button entity as another target for the chore."""
         if self.entity_id is not None:
             self._manager.register_entity(self.entity_id, self._chore_id)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Remove this button from service-target mapping."""
+        if self.entity_id is not None:
+            self._manager.unregister_entity(self.entity_id)
 
     async def async_press(self) -> None:
         """Record a completion event when the button is pressed."""

@@ -7,10 +7,10 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from .const import DATA_MANAGER, DOMAIN
 from .manager import TimeSinceThatManager
@@ -18,13 +18,12 @@ from .manager import TimeSinceThatManager
 SCAN_INTERVAL = timedelta(minutes=1)
 
 
-async def async_setup_platform(
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
+    entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
-    """Set up Time Since That sensors from YAML."""
+    """Set up Time Since That sensors from one config entry."""
     manager: TimeSinceThatManager = hass.data[DOMAIN][DATA_MANAGER]
     async_add_entities(
         ChoreSensor(manager, chore_id) for chore_id in manager.chore_ids
@@ -60,7 +59,9 @@ class ChoreSensor(SensorEntity):
         )
 
     async def async_will_remove_from_hass(self) -> None:
-        """Clean up listeners."""
+        """Clean up listeners and service-target mapping."""
+        if self.entity_id is not None:
+            self._manager.unregister_entity(self.entity_id)
         if self._remove_manager_listener is not None:
             self._remove_manager_listener()
         if self._remove_time_listener is not None:

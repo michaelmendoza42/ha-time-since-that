@@ -60,6 +60,7 @@ class ChoreDefinition:
     area: str | None = None
     recommended_every: RecommendedEvery | None = None
     elapsed_display: ElapsedDisplay = ElapsedDisplay()
+    tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +136,12 @@ def validate_chore_definitions(definitions: list[ChoreDefinition]) -> list[Chore
         if definition.recommended_every is not None:
             _validate_positive_value(definition.recommended_every.value, "recommended_every.value")
             _validate_unit(definition.recommended_every.unit)
+        if len(set(definition.tags)) != len(definition.tags):
+            raise ChoreConfigError(f"Duplicate tags for chore '{definition.id}'.")
+        if any(not tag or tag != tag.strip() or tag != tag.lower() for tag in definition.tags):
+            raise ChoreConfigError(
+                f"Tags for chore '{definition.id}' must be non-empty lowercase strings."
+            )
         _validate_unit(definition.elapsed_display.unit)
         if definition.elapsed_display.rounding not in ROUNDING_MODES:
             raise ChoreConfigError(
@@ -161,6 +168,7 @@ def definition_from_dict(data: dict[str, Any]) -> ChoreDefinition:
             unit=str(display.get("unit", DEFAULT_DISPLAY_UNIT)),
             rounding=str(display.get("rounding", DEFAULT_DISPLAY_ROUNDING)),
         ),
+        tags=_tags_from_value(data.get("tags")),
     )
     return validate_chore_definitions([definition])[0]
 
@@ -205,6 +213,7 @@ def build_snapshot(
         "friendly_chore_name": definition.name,
         "completion_count": len(ordered),
         "elapsed_unit": display_unit,
+        "tags": list(definition.tags),
         "category": definition.category,
         "area": definition.area,
     }
@@ -309,6 +318,44 @@ def build_snapshot(
         )
 
     return ChoreSnapshot(f"{elapsed_text} since", attrs)
+
+
+def _tags_from_value(value: Any) -> tuple[str, ...]:
+    """Normalize a JSON/YAML tag list into stable lowercase values."""
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ChoreConfigError("tags must be a list.")
+
+    normalized = tuple(str(tag).strip().lower() for tag in value)
+    if any(not tag for tag in normalized):
+        raise ChoreConfigError("tags cannot contain empty values.")
+    if len(set(normalized)) != len(normalized):
+        raise ChoreConfigError("tags cannot contain duplicates.")
+    return normalized
+
+
+def definition_to_dict(definition: ChoreDefinition) -> dict[str, Any]:
+    """Serialize a normalized chore definition for config-entry options."""
+    data: dict[str, Any] = {
+        "id": definition.id,
+        "name": definition.name,
+        "tags": list(definition.tags),
+        "elapsed_display": {
+            "unit": definition.elapsed_display.unit,
+            "rounding": definition.elapsed_display.rounding,
+        },
+    }
+    if definition.category:
+        data["category"] = definition.category
+    if definition.area:
+        data["area"] = definition.area
+    if definition.recommended_every:
+        data["recommended_every"] = {
+            "value": definition.recommended_every.value,
+            "unit": definition.recommended_every.unit,
+        }
+    return data
 
 
 def _recommended_from_dict(data: dict[str, Any]) -> RecommendedEvery:

@@ -8,6 +8,7 @@ from custom_components.time_since_that.model import (
     ChoreConfigError,
     CompletionEvent,
     definition_from_dict,
+    definition_to_dict,
     build_snapshot,
     format_duration,
     validate_chore_definitions,
@@ -41,6 +42,30 @@ class TestChoreModel(unittest.TestCase):
         self.assertEqual(recommended.seconds, 45 * 60)
         self.assertEqual(definition.elapsed_display.unit, "minutes")
         self.assertEqual(definition.elapsed_display.rounding, "nearest")
+
+    def test_tags_are_normalized_and_exposed_on_snapshot(self) -> None:
+        definition = definition_from_dict(
+            {
+                "id": "scoop_cat_litter",
+                "name": "Scoop cat litter",
+                "tags": [" Pets ", "Daily"],
+            }
+        )
+
+        self.assertEqual(definition.tags, ("pets", "daily"))
+        self.assertEqual(definition_to_dict(definition)["tags"], ["pets", "daily"])
+        snapshot = build_snapshot(definition, [], datetime(2026, 6, 30, tzinfo=timezone.utc))
+        self.assertEqual(snapshot.attributes["tags"], ["pets", "daily"])
+
+    def test_duplicate_tags_rejected(self) -> None:
+        with self.assertRaises(ChoreConfigError):
+            definition_from_dict(
+                {
+                    "id": "vacuum",
+                    "name": "Vacuum",
+                    "tags": ["home", " Home "],
+                }
+            )
 
     def test_duplicate_ids_rejected(self) -> None:
         first = definition_from_dict({"id": "vacuum", "name": "Vacuum"})

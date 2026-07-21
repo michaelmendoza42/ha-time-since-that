@@ -2,11 +2,13 @@
   "domain": "time_since_that",
   "name": "Time Since That",
   "codeowners": [],
-  "config_flow": false,
+  "config_flow": true,
+  "single_config_entry": true,
+  "dependencies": ["frontend"],
   "documentation": "https://github.com/michaelmendoza42/ha-time-since-that",
   "integration_type": "helper",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/michaelmendoza42/ha-time-since-that/issues",
   "requirements": [],
-  "version": "0.3.0"
+  "version": "1.0.0"
 }
