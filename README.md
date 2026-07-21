@@ -143,10 +143,11 @@ This repository is public/shareable. Do not commit machine-specific deployment n
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests
+npm install
+npm test
 ```
 
-Home Assistant config-flow validation requires a Home Assistant-compatible test environment. Browser-observable card behavior is exercised by the frontend harnesses in `tests/frontend/`.
+`npm test` runs the pure Python model tests and the Playwright card regression suite. Home Assistant config-flow validation still requires a Home Assistant-compatible test environment.
 
 ## License
 

@@ -1,0 +1,15 @@
+{
+  "name": "ha-time-since-that",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Home Assistant integration for tracking chore freshness.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "test:python": "python3 -m unittest discover -s tests",
+    "test:card": "playwright test tests/frontend/time-since-that-card.spec.mjs",
+    "test": "npm run test:python && npm run test:card"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
+  }
+}

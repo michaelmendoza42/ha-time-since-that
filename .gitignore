@@ -10,6 +10,7 @@ CURSOR.md
 CODEX.md
 .agents/
 .pi/
+.pi-subagents/
 .ai/
 .aider*
 .claude/
@@ -21,6 +22,11 @@ CODEX.md
 
 # Generated Home Assistant package output
 output/
+
+# JavaScript test state
+node_modules/
+test-results/
+playwright-report/
 
 # Python local state
 __pycache__/
