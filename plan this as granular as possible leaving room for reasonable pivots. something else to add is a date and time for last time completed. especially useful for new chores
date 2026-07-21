@@ -1,0 +1,412 @@
+# Time Since That — clean-reset UI chore management, tags, and cards plan
+
+## Goal
+
+Replace the current YAML-first prototype with the desired Home Assistant-native experience:
+
+1. Chores are added, edited, and removed in the Time Since That integration UI; `configuration.yaml` is no longer the runtime source of truth.
+2. Creating a chore can optionally record its exact last-completed date/time, and a separate correction action can adjust the latest completion afterward.
+3. Users can add an aggregate card or a separate card for one existing chore through the dashboard UI.
+4. Chores support tags, and aggregate cards implement the requested tag state machine:
+   - `All` selects every available tag and `No tag`.
+   - Clicking selected `All` clears every selection and shows zero chores.
+   - Clicking an individual tag while All is complete removes only that tag and soft-deselects All.
+   - Re-selecting the final missing filter automatically makes All selected again.
+   - Multiple selected tags use OR matching.
+   - `No tag` selects chores with no tags.
+
+## Deliberate clean-reset contract
+
+This plan intentionally does **not** migrate the current YAML configuration or its completion history into the new UI model.
+
+- YAML-defined chores stop being supported after the breaking release.
+- Existing `time_since_that.history` and any earlier `chore_tracker.history` data are not imported, transformed, or deleted by the new code.
+- New UI-managed data uses a new storage namespace/schema so old data remains untouched as a backup/recovery artifact.
+- Users re-create desired chores in the UI and can use the initial last-completed date/time field to seed meaningful freshness values.
+- Before updating, users should create a Home Assistant backup and retain their existing YAML file until the new setup is verified.
+
+## Execution mode
+
+**Chosen mode: High-risk**
+
+### Rationale
+
+Although migration is deliberately out of scope, this is a breaking configuration/lifecycle reset for an installed HA integration. It replaces its runtime source of truth, introduces persistent UI-managed data, changes startup behavior, and can make existing entities disappear until chores are re-created.
+
+### Escalation triggers
+
+- Reintroducing YAML import, legacy history recovery, or entity-registry continuity.
+- Adding editable historical completion corrections, history purge, per-user persistence, or automatic dashboard mutation.
+- Raising Home Assistant’s minimum version because required config-flow/editor APIs are unavailable.
+
+### Required artifacts
+
+- Updated behavior contract and README reset/reconfiguration guide.
+- Explicit release notes describing the break and backup requirement.
+- Config flow/options flow tests.
+- Storage tests for new data only, with proof that legacy keys are left untouched.
+- Browser/Playwright tests and screenshots for card editor, single-chore cards, and tag behavior.
+
+### Approval gates
+
+1. Approve the no-migration/no-import reset contract before implementation.
+2. Approve chore deletion/history-retention behavior before the Options flow is built.
+3. Approve tag semantics and UI copy before frontend implementation.
+4. Approve a real HAOS fresh-setup rehearsal before release.
+
+### Verification expectations
+
+`ready for review` requires configuration-flow and options-flow test evidence, fresh HAOS setup evidence, browser evidence for the custom card/editor/tag controls, and proof that old storage was not touched.
+
+## Findings and evidence
+
+- The integration is currently YAML-only: `manifest.json` has `config_flow: false`; `__init__.py` reads `time_since_that.chores` and uses legacy discovery.
+- `ChoreDefinition` already separates static definition data from `CompletionEvent` history; `CompletionEvent.done_at` is timezone-aware, making an initial last-completed event straightforward.
+- The current manager stores events under `time_since_that.history`; this plan must not reuse or modify it.
+- Sensor/button unique IDs currently derive from legacy YAML IDs. Clean reset permits a new stable UI identity strategy, but the plan should avoid needless ID churn after v1 is released.
+- The custom card currently auto-discovers all source sensors, supports optional explicit entities, and already has a browser harness. It has no visual card editor or tag/filter state.
+- Existing raw `elapsed_value` ordering may compare differing display units incorrectly; this remains out of scope for the reset unless separately approved.
+
+## Target architecture
+
+```text
+One config entry: Time Since That household
+  Config entry data/options:
+    active chore definitions
+  Runtime data:
+    UI chore manager
+    new v1 history repository
+    services/frontend registration
+
+New v1 history store
+  key: time_since_that.v1 (or equivalent distinct key)
+  data: completion event buckets keyed by immutable UI chore ID
+
+Frontend
+  auto-registered custom card resource
+  visual card editor:
+    all chores mode
+    one chore mode
+  card-local ephemeral tag filtering
+```
+
+## Plan steps
+
+### Phase 0 — Declare and prepare the breaking reset
+
+1. Update the product/behavior contract to state that v1 uses UI-managed chores and no longer consumes YAML configuration.
+2. Add a release-note/reset section to README:
+   - make a full HA backup;
+   - retain current YAML/history as backup only;
+   - update/restart;
+   - create chores in UI;
+   - remove the old YAML block only after validating the new setup.
+3. Define exact legacy behavior:
+   - new code does not read, write, import, or delete `time_since_that.history` or `chore_tracker.history`;
+   - legacy data remains on disk but is not visible in v1;
+   - no automatic entity ID preservation is promised across the reset;
+   - during this breaking release, a **no-op YAML compatibility shim** accepts an existing `time_since_that:` root so Home Assistant startup does not fail, logs that it is ignored, and never parses chore definitions or creates runtime entities from it.
+4. Remove the no-op shim only in a later release after users have manually removed the old YAML block; this is YAML tolerance, not YAML support or migration.
+4. Add regression fixtures proving v1 storage does not access the legacy keys.
+5. Choose and document v1 release versioning and minimum supported Home Assistant version.
+
+**Acceptance criteria:** the break is explicit, reversible through HA backup/legacy files, and impossible to mistake for a history migration.
+
+**Evidence:** updated reset guide, release notes, test asserting legacy stores are not read/written.
+
+### Phase 1 — Introduce config-entry lifecycle
+
+1. Set `manifest.json` `config_flow: true`.
+2. Add `config_flow.py` and a domain-level unique ID so each household has exactly one Time Since That config entry.
+3. Replace legacy YAML startup/config-schema runtime wiring:
+   - stop reading or validating YAML chore definitions;
+   - retain only a no-op permissive compatibility shim for the old `time_since_that:` root during this reset release;
+   - emit a clear warning that the root is ignored and must be removed after UI-managed chores are verified;
+   - ensure retained YAML can never create a duplicate runtime chore/entity;
+   - schedule removal of the shim for a later release.
+4. Implement `async_setup_entry`:
+   - instantiate v1 history repository;
+   - load active chore definitions from config entry data/options;
+   - create one manager;
+   - register services/frontend idempotently;
+   - forward sensor and button platforms through config entries.
+5. Implement `async_unload_entry`:
+   - unload platforms;
+   - remove listeners/runtime data;
+   - preserve v1 history store.
+6. Convert `sensor.py` and `button.py` to `async_setup_entry`.
+7. Register update listener or use `OptionsFlowWithReload` so chore changes reload entities safely.
+
+**Acceptance criteria:** a fresh config entry with zero chores loads cleanly, unloads cleanly, and never reads legacy YAML/history.
+
+**Evidence:** HA lifecycle tests for create/setup/unload/reload and empty household state.
+
+### Phase 2 — Define new UI chore and history data contracts
+
+1. Define a versioned config-entry chore model with:
+   - immutable internal `chore_id`;
+   - display `name`;
+   - optional category and area;
+   - optional tags;
+   - optional cadence;
+   - elapsed display settings.
+2. Generate a stable chore ID from initial name, with deterministic collision handling:
+   - generate normalized slug;
+   - show collision error/confirmation rather than silently merging chores;
+   - keep ID immutable on later rename.
+3. Introduce a new history store key/schema, separate from all legacy stores.
+4. Keep events as timestamped `CompletionEvent` records; add allowed source `initial` for creation-time backfill.
+5. Define remove behavior:
+   - remove active configuration/entity access after confirmation;
+   - retain v1 history bucket by default;
+   - defer permanent history purge to a separate future feature.
+6. Keep `category` independent from tags.
+
+**Acceptance criteria:** fresh UI chore definitions and their history are isolated from legacy data; a rename preserves the same v1 identity/history.
+
+**Evidence:** model/repository serialization tests, add/remove/rename tests.
+
+### Phase 3 — Build create flow with optional initial completion date/time
+
+1. Build initial config flow:
+   - allow creating the household with no chores; or
+   - guide the user through adding the first chore.
+2. Add-chore flow fields:
+   - name;
+   - category/area;
+   - tags;
+   - recommended cadence and display choices;
+   - optional initial last-completed date/time.
+3. Use Home Assistant `DateTimeSelector` for the initial date/time.
+4. Normalize with HA datetime utilities and require timezone-aware storage.
+5. Reject invalid and future dates/times.
+6. Persist the chore definition before creating history.
+7. If a date/time is supplied, create exactly one v1 `CompletionEvent(source="initial")`.
+8. Make flow completion idempotent so retries do not create duplicate initial events.
+9. On success, reload the entry and show the created chore in the Options flow.
+
+**Acceptance criteria:** a new chore can be `never` or seeded with an exact past completion; resulting sensor shows the correct freshness and `last_done_at`.
+
+**Evidence:** config-flow tests for valid/invalid/future datetime, one-event assertion, screenshot of add flow.
+
+### Phase 4 — Build Options flow for ongoing chore management
+
+1. Add Options flow menu:
+   - Add chore;
+   - Edit chore;
+   - Adjust last completed;
+   - Remove chore.
+2. Edit flow pre-populates name/category/area/tags/cadence/display values.
+3. Keep the internal chore ID out of ordinary editing. Keep completion history out of ordinary metadata editing, but provide a distinct **Adjust last completed** flow.
+4. Adjust-last-completed flow:
+   - show the current latest completion timestamp, or explain that the chore is still never completed;
+   - use `DateTimeSelector` for a corrected past date/time;
+   - reject invalid/future values and require confirmation that interval statistics/history will change;
+   - update only the latest `CompletionEvent.done_at`, preserving its event ID, user/context metadata, and source;
+   - reload/notify entities so freshness, overdue state, and interval statistics recalculate immediately.
+5. On edit, write normalized definition data and reload entry.
+6. On remove:
+   - require confirmation;
+   - explicitly remove the matching sensor/button entity-registry records for this config entry and chore unique IDs, rather than assuming platform reload cleans stale rows;
+   - remove active sensor/button entities and accept that existing dashboard references become unavailable;
+   - retain the v1 event bucket;
+   - explain that history is retained but inaccessible unless a future restore feature is added.
+7. Update translation strings and user-facing errors for duplicate name/ID, validation errors, empty households, adjustment confirmation, and removal.
+
+**Acceptance criteria:** no YAML edit/restart is needed to add or edit a chore; a latest completion can be explicitly corrected without creating a duplicate event; entry reload manages platform entities; removal is explicit and non-destructive to history.
+
+**Evidence:** options-flow add/edit/adjust/remove tests, latest-event/stat-recalculation assertions, sensor/button presence tests before/after reload, UI screenshots.
+
+### Phase 5 — Add tags to backend, UI forms, generator, and sensor attributes
+
+1. Add tag constants and `tags` to the UI chore model.
+2. Normalize tags as case-insensitive lowercase strings:
+   - trim whitespace;
+   - reject blank values;
+   - reject duplicates after normalization;
+   - preserve deterministic display labels.
+3. Add a simple comma-separated tags input to config/options forms with help text.
+4. Add tags input to the standalone YAML generator for users who still use it as a drafting tool, but label generated YAML as legacy/non-runtime after the reset release.
+5. Include `tags: []` in every sensor snapshot, including never-completed chores.
+6. Update examples/docs to show tagged, untagged, and multi-tag chores.
+7. Do not automatically map `category` to a tag.
+
+**Acceptance criteria:** tags are validated and stored through UI, consistently exposed on sensor attributes, and missing tags are always an empty array.
+
+**Evidence:** model/form tests, generator browser test, snapshot assertions.
+
+### Phase 6 — Auto-register the custom card resource and add visual card editor
+
+1. Register the bundled card JavaScript with Home Assistant’s documented frontend helper so users do not add a dashboard Resource URL manually.
+2. Retain the static-path serving needed by the integration, but make frontend registration idempotent across reloads.
+3. Add a custom card editor element and `getConfigElement()`.
+4. Editor fields:
+   - title;
+   - card mode: `All chores` or `One chore`;
+   - one-chore selector populated directly from `hass.states` filtered to valid `sensor.time_since_that_*` entities, with a generic HA entity selector only as an enhancement when its filtering API is proven compatible;
+   - optional show-tag-filters toggle for All mode, default on.
+5. Make card configs explicit and simple:
+   - aggregate: `type: custom:time-since-that-card`, optional title;
+   - one chore: same type + `entity: sensor.time_since_that_<id>`.
+6. Preserve unknown card config keys in editor events.
+7. Never create/delete chores when cards are added, changed, moved, or deleted.
+8. One-chore card suppresses aggregate filter controls and renders that chore’s state/Mark done action only.
+
+**Acceptance criteria:** user can choose Time Since That Card from Add Card, configure one existing chore for a separate card, and never visit Resources/manual YAML for normal card setup.
+
+**Evidence:** Playwright Add Card/editor tests, screenshots, no browser console errors.
+
+### Phase 7 — Implement aggregate tag filters with the requested state machine
+
+1. Refactor card behavior into narrow methods:
+   - resolve source entries;
+   - resolve effective tags;
+   - derive filter universe;
+   - reconcile selection on HA state update;
+   - derive All state;
+   - filter visible entries.
+2. Filter universe ordering:
+   - synthetic `All` first;
+   - unique real tags alphabetically;
+   - synthetic `No tag` last, only when one or more source chores are untagged.
+3. Use internal reserved keys for `All` and `No tag` to avoid collisions with real tags.
+4. Initial meaningful render selects every available filter; All appears selected.
+5. Implement exact selection transitions:
+   - selected All → clear all selected filters → zero rows;
+   - unselected/mixed All → select all filters;
+   - individual deselection from complete state → remove that filter only; All becomes mixed/soft-deselected;
+   - reselect final missing filter → All becomes selected;
+   - no selection remains a distinct empty state, never an “unfiltered” fallback;
+   - selected real tags use OR behavior;
+   - multi-tag chores appear once;
+   - `No tag` matches effective empty tag lists only.
+6. Dynamic updates:
+   - preserve selection through normal sensor refreshes and Mark done rerenders;
+   - prune removed tags;
+   - include newly discovered tags only when previous state was complete/All;
+   - do not auto-select new tags in partial/empty selection.
+7. Preserve existing source order after filtering:
+   - aggregate cards keep overdue → existing elapsed policy → name;
+   - one-chore mode has one row.
+8. Implement native chip buttons with keyboard behavior, visible focus, accessible pressed/mixed state, wrapping mobile layout, and focus preservation after render.
+9. Keep runtime selection card-local and ephemeral; no per-user persistence in this release.
+
+**Acceptance criteria:** All, soft-deselect, OR, No tag, no-selection, dynamic-update, and accessibility semantics exactly match the goal statement.
+
+**Evidence:** browser state-machine matrix, accessibility snapshots, narrow/wide screenshots, service success/error filter-preservation proof.
+
+### Phase 8 — Update documentation and release material
+
+1. Rewrite `docs/behavior.md` around UI-managed chore definitions and v1 history.
+2. Update README:
+   - clean-reset warning;
+   - backup/reconfigure steps;
+   - create/edit/remove chore instructions;
+   - initial completion date/time behavior;
+   - tags/filter behavior;
+   - aggregate and one-chore card instructions;
+   - no manual resource setup.
+3. Remove obsolete YAML configuration examples from the primary setup path; move legacy generator/YAML instructions into an explicitly marked archived/legacy section or remove them if no longer useful.
+4. Add a concise breaking-change section to release notes/version metadata.
+5. Keep public docs free of local server/credential/private deployment detail.
+
+**Acceptance criteria:** a new user can configure the integration entirely through HA UI; an existing user can understand the clean reset and preserve a backup before changing anything.
+
+**Evidence:** documentation review, copy/paste UI-flow validation, no stale YAML-first claims.
+
+## Gotchas and risks
+
+- This is intentionally a breaking reset: users must back up and re-create chores; do not imply their previous history will appear automatically.
+- New code must never write legacy history keys, even accidentally through a reused storage constant.
+- Config-flow retry/entry reload must not duplicate initial completion events.
+- Adjusting last completed must update only the latest event, preserve event attribution metadata, and visibly warn that interval statistics change.
+- A chore removal must not silently purge v1 history.
+- Date/time input must be timezone-normalized and reject future timestamps.
+- Cards are not configuration authority; card lifecycle must not alter chores.
+- `All` is derived aggregate state, not a real stored tag.
+- `No tag` requires reserved internal identity so a real tag cannot conflict with it.
+- Ordinary HA state updates must not reset tag selection.
+- Do not broaden scope into user-persisted filters, history correction, AND tag matching, category-to-tag conversion, Area Registry linkage, or mixed-unit elapsed sorting.
+- Current working tree contains a modified frontend harness and an unrelated untracked planning-artifact file; review/preserve them before implementation cleanup.
+
+## Validation plan
+
+### Backend
+
+- Config-entry setup, unload, reload, and empty-household tests.
+- Add/edit/adjust-last-completed/remove chore flow tests.
+- Initial and adjusted timestamp valid/past/future/invalid/retry scenarios, including latest-event-only and recalculated-stat assertions.
+- v1 storage isolation tests proving legacy keys remain untouched.
+- Tag normalization/schema/snapshot tests.
+- Sensor/button creation/removal tests.
+- Service call and Mark done event tests.
+
+### Browser and card UI
+
+Add a committed, repeatable Playwright command/spec; do not rely only on ad hoc browser harness work.
+
+Required browser scenarios:
+
+1. Card resource is automatically available after integration setup.
+2. Add Card exposes Time Since That Card.
+3. Aggregate card auto-discovers active chores.
+4. One-chore editor selection renders only that chore.
+5. Initial All state shows every chore.
+6. All deselect clears all and shows dedicated zero-selection state.
+7. All reselect restores all filters/rows.
+8. Individual deselection soft-deselects All.
+9. Reselecting final missing tag restores All.
+10. OR matching, multi-tag deduplication, and No-tag matching.
+11. New tag/chore behavior in complete vs partial filter modes.
+12. Mark done success/error preserves current tag selections.
+13. Keyboard/focus/ARIA filter behavior.
+14. Mobile (<520px) and desktop visual layouts.
+15. Light/dark theme readability plus console/network clean checks.
+
+### HAOS fresh-setup proof
+
+- Create a Home Assistant backup before installing the breaking release.
+- Install/reset on a test copy or clearly disposable setup.
+- Create chores with/without initial timestamp and with tags.
+- Add aggregate and single-chore cards through UI.
+- Exercise filters and Mark done.
+- Confirm legacy YAML/history remains present but unused.
+
+## Acceptance criteria
+
+The work is ready for review only when:
+
+- A user can install the integration and manage chores without editing YAML.
+- An optional exact past last-completed date/time seeds one correct completion event, and a separate corrected-last-completed action updates only that latest event.
+- Tags are stored and visible in sensor attributes.
+- Aggregate cards obey the requested All/soft-deselect/OR/No-tag behavior.
+- A user can add an aggregate or one-chore card through the visual dashboard UI with no manual resource URL.
+- The implementation does not import, mutate, or delete legacy YAML/history data.
+- Config-flow, storage isolation, frontend Playwright, accessibility, and HAOS proof artifacts pass.
+
+## Parallelization assessment
+
+### Recommended parallel work after architecture approval
+
+1. **Backend lifecycle lane:** config entries, new storage repository, initial completion, config/options flows.
+2. **Tag/model lane:** chore data contract, tag normalization, sensor attributes, UI form fields, generator/docs.
+3. **Frontend lane:** auto-resource registration, card editor, one-chore mode, tag filter state machine, Playwright harness.
+4. **Validation lane:** read-only review plus HA lifecycle/browser verification after merges.
+
+### Must remain serial
+
+- Decide/reset data contract before implementing config flow or options forms.
+- New storage repository before initial completion and chore removal behavior.
+- Tags model/attributes before card tag filtering.
+- One writer per coupled file family; use worktrees for parallel backend/frontend changes.
+
+## Deliverables and evidence
+
+- Breaking-release/reset guide and release notes.
+- Config entry/config flow/options flow implementation.
+- New isolated v1 history repository and legacy-key non-interference tests.
+- UI create/edit/remove chore experience with optional initial completion datetime.
+- Tags throughout model, forms, snapshots, docs, and generator.
+- Auto-registered card resource, visual card editor, aggregate/single-card modes.
+- Tag filtering with exact requested state machine.
+- Passing backend tests, repeatable Playwright browser tests, screenshots, console/network results, and HAOS fresh-setup evidence.
