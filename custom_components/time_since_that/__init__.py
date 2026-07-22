@@ -65,7 +65,7 @@ async def async_setup_entry(hass: Any, entry: Any) -> bool:
     history = TimeSinceThatHistoryRepository(hass)
     await history.async_load()
 
-    raw_chores = entry.options.get(CONF_CHORES, [])
+    raw_chores = entry.options.get(CONF_CHORES, entry.data.get(CONF_CHORES, []))
     definitions = validate_chore_definitions(
         [definition_from_dict(chore) for chore in raw_chores]
     )

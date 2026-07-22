@@ -74,8 +74,7 @@ class TimeSinceThatConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type
                     stored_chore[CONF_LAST_COMPLETED] = initial.isoformat()
                 return self.async_create_entry(
                     title="Time Since That",
-                    data={},
-                    options={CONF_CHORES: [stored_chore]},
+                    data={CONF_CHORES: [stored_chore]},
                 )
 
         return self.async_show_form(
@@ -120,7 +119,7 @@ class TimeSinceThatOptionsFlow(config_entries.OptionsFlow):
         """Add one UI-managed chore."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            chores = _stored_chores(self.config_entry.options)
+            chores = _entry_chores(self.config_entry)
             try:
                 chore = _chore_from_form(user_input, {item["id"] for item in chores})
                 initial = _initial_datetime(user_input.get(CONF_LAST_COMPLETED))
@@ -152,10 +151,10 @@ class TimeSinceThatOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_edit()
             return self.async_show_form(
                 step_id="edit_select",
-                data_schema=_chore_selector_schema(_stored_chores(self.config_entry.options)),
+                data_schema=_chore_selector_schema(_entry_chores(self.config_entry)),
             )
 
-        chores = _stored_chores(self.config_entry.options)
+        chores = _entry_chores(self.config_entry)
         current = _find_chore(chores, self._selected_chore_id)
         if current is None:
             self._selected_chore_id = None
@@ -195,7 +194,7 @@ class TimeSinceThatOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_adjust_last_completed()
             return self.async_show_form(
                 step_id="adjust_select",
-                data_schema=_chore_selector_schema(_stored_chores(self.config_entry.options)),
+                data_schema=_chore_selector_schema(_entry_chores(self.config_entry)),
             )
 
         manager = self.hass.data.get(DOMAIN, {}).get(DATA_MANAGER)
@@ -210,7 +209,12 @@ class TimeSinceThatOptionsFlow(config_entries.OptionsFlow):
             except ValueError:
                 errors[CONF_LAST_COMPLETED] = "invalid_last_completed"
             else:
-                return self.async_create_entry(data=dict(self.config_entry.options))
+                return self.async_create_entry(
+                    data={
+                        **self.config_entry.options,
+                        CONF_CHORES: _entry_chores(self.config_entry),
+                    }
+                )
 
         return self.async_show_form(
             step_id=MENU_ADJUST,
@@ -231,7 +235,7 @@ class TimeSinceThatOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_remove()
             return self.async_show_form(
                 step_id="remove_select",
-                data_schema=_chore_selector_schema(_stored_chores(self.config_entry.options)),
+                data_schema=_chore_selector_schema(_entry_chores(self.config_entry)),
             )
 
         errors: dict[str, str] = {}
@@ -246,7 +250,7 @@ class TimeSinceThatOptionsFlow(config_entries.OptionsFlow):
                 )
                 chores = [
                     chore
-                    for chore in _stored_chores(self.config_entry.options)
+                    for chore in _entry_chores(self.config_entry)
                     if chore["id"] != self._selected_chore_id
                 ]
                 return self.async_create_entry(data={**self.config_entry.options, CONF_CHORES: chores})
@@ -376,9 +380,14 @@ def _required_past_datetime(value: Any) -> datetime:
     return parsed
 
 
-def _stored_chores(options: dict[str, Any]) -> list[dict[str, Any]]:
-    """Copy JSON chore definitions before a flow mutation."""
-    return deepcopy(list(options.get(CONF_CHORES, [])))
+def _entry_chores(entry: ConfigEntry) -> list[dict[str, Any]]:
+    """Copy chore definitions from v1 options or first-setup entry data.
+
+    Config flows create the first chore in entry data. The first later options
+    update promotes that same list into options without losing the chore.
+    """
+    stored = entry.options.get(CONF_CHORES, entry.data.get(CONF_CHORES, []))
+    return deepcopy(list(stored))
 
 
 def _find_chore(chores: list[dict[str, Any]], chore_id: str) -> dict[str, Any] | None:
