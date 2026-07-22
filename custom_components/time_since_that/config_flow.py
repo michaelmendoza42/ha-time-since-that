@@ -10,7 +10,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.config_entries import ConfigEntry, OptionsFlowWithConfigEntry
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 from homeassistant.util import dt as dt_util
@@ -88,15 +88,19 @@ class TimeSinceThatConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type
     @callback
     def async_get_options_flow(entry: ConfigEntry) -> config_entries.OptionsFlow:
         """Return the singleton chore-management options flow."""
-        return TimeSinceThatOptionsFlow(entry)
+        return TimeSinceThatOptionsFlow()
 
 
-class TimeSinceThatOptionsFlow(OptionsFlowWithConfigEntry):
-    """Manage the chore list stored in the singleton entry options."""
+class TimeSinceThatOptionsFlow(config_entries.OptionsFlow):
+    """Manage the chore list stored in the singleton entry options.
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
+    This documented base class ensures Home Assistant recognizes the options
+    flow and renders the integration's Configure action.
+    """
+
+    def __init__(self) -> None:
         """Initialize selection state for multi-step chore actions."""
-        super().__init__(config_entry)
+        super().__init__()
         self._selected_chore_id: str | None = None
 
     async def async_step_init(
@@ -116,7 +120,7 @@ class TimeSinceThatOptionsFlow(OptionsFlowWithConfigEntry):
         """Add one UI-managed chore."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            chores = _stored_chores(self.options)
+            chores = _stored_chores(self.config_entry.options)
             try:
                 chore = _chore_from_form(user_input, {item["id"] for item in chores})
                 initial = _initial_datetime(user_input.get(CONF_LAST_COMPLETED))
@@ -129,7 +133,7 @@ class TimeSinceThatOptionsFlow(OptionsFlowWithConfigEntry):
                 if initial is not None:
                     stored_chore[CONF_LAST_COMPLETED] = initial.isoformat()
                 chores.append(stored_chore)
-                return self.async_create_entry(data={**self.options, CONF_CHORES: chores})
+                return self.async_create_entry(data={**self.config_entry.options, CONF_CHORES: chores})
 
         return self.async_show_form(
             step_id=MENU_ADD,
@@ -148,10 +152,10 @@ class TimeSinceThatOptionsFlow(OptionsFlowWithConfigEntry):
                 return await self.async_step_edit()
             return self.async_show_form(
                 step_id="edit_select",
-                data_schema=_chore_selector_schema(_stored_chores(self.options)),
+                data_schema=_chore_selector_schema(_stored_chores(self.config_entry.options)),
             )
 
-        chores = _stored_chores(self.options)
+        chores = _stored_chores(self.config_entry.options)
         current = _find_chore(chores, self._selected_chore_id)
         if current is None:
             self._selected_chore_id = None
@@ -172,7 +176,7 @@ class TimeSinceThatOptionsFlow(OptionsFlowWithConfigEntry):
                 if current.get(CONF_LAST_COMPLETED):
                     replacement_data[CONF_LAST_COMPLETED] = current[CONF_LAST_COMPLETED]
                 _replace_chore(chores, current["id"], replacement_data)
-                return self.async_create_entry(data={**self.options, CONF_CHORES: chores})
+                return self.async_create_entry(data={**self.config_entry.options, CONF_CHORES: chores})
 
         return self.async_show_form(
             step_id=MENU_EDIT,
@@ -191,7 +195,7 @@ class TimeSinceThatOptionsFlow(OptionsFlowWithConfigEntry):
                 return await self.async_step_adjust_last_completed()
             return self.async_show_form(
                 step_id="adjust_select",
-                data_schema=_chore_selector_schema(_stored_chores(self.options)),
+                data_schema=_chore_selector_schema(_stored_chores(self.config_entry.options)),
             )
 
         manager = self.hass.data.get(DOMAIN, {}).get(DATA_MANAGER)
@@ -206,7 +210,7 @@ class TimeSinceThatOptionsFlow(OptionsFlowWithConfigEntry):
             except ValueError:
                 errors[CONF_LAST_COMPLETED] = "invalid_last_completed"
             else:
-                return self.async_create_entry(data=dict(self.options))
+                return self.async_create_entry(data=dict(self.config_entry.options))
 
         return self.async_show_form(
             step_id=MENU_ADJUST,
@@ -227,7 +231,7 @@ class TimeSinceThatOptionsFlow(OptionsFlowWithConfigEntry):
                 return await self.async_step_remove()
             return self.async_show_form(
                 step_id="remove_select",
-                data_schema=_chore_selector_schema(_stored_chores(self.options)),
+                data_schema=_chore_selector_schema(_stored_chores(self.config_entry.options)),
             )
 
         errors: dict[str, str] = {}
@@ -242,10 +246,10 @@ class TimeSinceThatOptionsFlow(OptionsFlowWithConfigEntry):
                 )
                 chores = [
                     chore
-                    for chore in _stored_chores(self.options)
+                    for chore in _stored_chores(self.config_entry.options)
                     if chore["id"] != self._selected_chore_id
                 ]
-                return self.async_create_entry(data={**self.options, CONF_CHORES: chores})
+                return self.async_create_entry(data={**self.config_entry.options, CONF_CHORES: chores})
 
         return self.async_show_form(
             step_id=MENU_REMOVE,
