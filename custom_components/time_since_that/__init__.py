@@ -25,7 +25,8 @@ from .model import definition_from_dict, parse_datetime, validate_chore_definiti
 PLATFORMS = ("sensor", "button")
 CARD_FRONTEND_PATH = Path(__file__).parent / "frontend"
 CARD_URL = f"/{DOMAIN}"
-CARD_JS_URL = f"{CARD_URL}/time-since-that-card.js"
+# A versioned URL makes the Companion App fetch a HACS-updated card bundle.
+CARD_JS_URL = f"{CARD_URL}/time-since-that-card.js?v=1.0.3"
 DATA_FRONTEND_REGISTERED = "frontend_registered"
 
 _LOGGER = logging.getLogger(__name__)
