@@ -73,7 +73,7 @@ The generated button and `time_since_that.mark_done` service both record a new c
 
 ## Dashboard cards
 
-The integration automatically registers the custom card; you do **not** add a dashboard Resource URL manually.
+For Home Assistant's standard storage-managed dashboard resources, the integration persistently registers the custom card; you do **not** add a dashboard Resource URL manually. YAML-managed Lovelace resources are the exception: declare the module resource in your own Lovelace YAML if you use that advanced mode.
 
 ### All chores card
 

@@ -20,13 +20,15 @@ from .const import (
     SERVICE_MARK_DONE,
     SOURCE_INITIAL,
 )
+from .frontend_resources import async_reconcile_module_resource, lovelace_resources
 from .model import definition_from_dict, parse_datetime, validate_chore_definitions
 
 PLATFORMS = ("sensor", "button")
 CARD_FRONTEND_PATH = Path(__file__).parent / "frontend"
 CARD_URL = f"/{DOMAIN}"
 # A versioned URL makes the Companion App fetch a HACS-updated card bundle.
-CARD_JS_URL = f"{CARD_URL}/time-since-that-card.js?v=1.0.3"
+CARD_VERSION = "1.0.4"
+CARD_JS_URL = f"{CARD_URL}/time-since-that-card.js?v={CARD_VERSION}"
 DATA_FRONTEND_REGISTERED = "frontend_registered"
 
 _LOGGER = logging.getLogger(__name__)
@@ -118,7 +120,22 @@ async def _async_register_frontend(hass: Any) -> None:
     else:  # Home Assistant 2024.6 compatibility
         hass.http.register_static_path(CARD_URL, str(CARD_FRONTEND_PATH), False)
 
+    resources = lovelace_resources(hass)
+    if resources is not None:
+        outcome = await async_reconcile_module_resource(resources, CARD_JS_URL, _LOGGER)
+        if outcome != "read_only":
+            _LOGGER.debug("Time Since That Lovelace resource registration: %s", outcome)
+            return
+
+    # YAML-managed or unavailable Lovelace resources cannot be mutated. This
+    # keeps a best-effort frontend fallback without changing user YAML.
     add_extra_js_url(hass, CARD_JS_URL)
+    _LOGGER.warning(
+        "Time Since That could not persist its Lovelace card resource; using "
+        "a best-effort frontend fallback. YAML-managed Lovelace resources must "
+        "declare %s as a module resource for a durable guarantee.",
+        CARD_JS_URL,
+    )
 
 
 def _register_services(hass: Any) -> None:

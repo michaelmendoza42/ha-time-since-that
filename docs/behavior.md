@@ -34,7 +34,9 @@ Full event history is not exposed as sensor attributes to avoid Recorder bloat.
 
 ## Dashboard card
 
-The bundled card is registered automatically by the integration.
+For storage-managed Lovelace resources, the integration persistently registers the bundled card as one origin-relative, versioned JavaScript module. This lets desktop and Companion App clients load the same card through LAN or external Home Assistant routes.
+
+YAML-managed Lovelace resources are read-only to integrations. In that advanced mode the integration provides a best-effort frontend fallback, but the user must declare the card module in Lovelace YAML for a durable loading guarantee.
 
 - **All chores mode** discovers active Time Since That sensors, sorts overdue first, and offers card-local tag filtering.
 - **One chore mode** displays a selected sensor with one inline Mark done action.
