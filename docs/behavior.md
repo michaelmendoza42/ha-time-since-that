@@ -13,7 +13,7 @@ Version 1 uses UI-managed chore definitions. It deliberately does not import or 
 - **Initial completion**: an optional past date/time supplied when creating a chore. It creates one event with source `initial`.
 - **Last-completed correction**: an explicit action that changes only the latest completion timestamp, preserving that event's identity and attribution. For a never-completed chore, it creates one initial event instead. It recalculates freshness and interval statistics.
 - **Freshness**: time since the latest completion event.
-- **Recommended cadence**: optional guidance, not a scheduler.
+- **Recommended cadence**: optional duration-based guidance, not a scheduler. It accepts minutes, hours, days, weeks, and fixed 30-day months.
 - **Tags**: normalized lowercase labels used by aggregate card filters. Category is separate metadata.
 
 ## UI management
@@ -40,6 +40,8 @@ YAML-managed Lovelace resources are read-only to integrations. In that advanced 
 
 - **All chores mode** discovers active Time Since That sensors, sorts overdue first, and offers card-local tag filtering.
 - **One chore mode** displays a selected sensor with one inline Mark done action.
+- Every chore row derives its primary text from `last_done_at`: minutes, hours, days, weeks, or fixed 30-day months ago. It appends local `HH:MM` when completed less than 24 hours ago, otherwise `DD/MM`.
+- Recommended cadence appears as a concise duration-only pill such as `2 weeks`; its tooltip and accessible label identify it as the recommended cadence.
 - Filter selection is ephemeral per card view; it does not change chore definitions.
 
 ### Tag filter contract

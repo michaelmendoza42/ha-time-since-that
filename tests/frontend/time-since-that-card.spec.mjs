@@ -7,6 +7,8 @@ const ROOT = process.cwd();
 const PORT = 4173;
 let server;
 
+test.use({ timezoneId: "UTC" });
+
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -57,6 +59,32 @@ test("aggregate card applies All, soft-deselect, and tag filters", async ({ page
 
   await page.evaluate(() => window.cardHarness.clickFilter("pets"));
   await expect.poll(() => page.evaluate(() => window.cardHarness.names())).toEqual(["Scoop cat litter"]);
+});
+
+test("card shows adaptive last-done details and concise cadence", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-07-26T14:45:00Z"));
+  await page.goto(`http://127.0.0.1:${PORT}/tests/frontend/time-since-that-card-tags-harness.html`);
+
+  const cadence = await page.evaluate(() => window.cardHarness.details()
+    .find((item) => item.name === "Scoop cat litter")
+    .pills.find((pill) => pill.label?.startsWith("Recommended cadence:")));
+  expect(cadence).toEqual({ text: "2 weeks", label: "Recommended cadence: 2 weeks" });
+
+  const cases = [
+    ["2026-07-26T14:27:00Z", "Last done: 18 minutes ago · 14:27"],
+    ["2026-07-26T11:45:00Z", "Last done: 3 hours ago · 11:45"],
+    ["2026-07-23T14:45:00Z", "Last done: 3 days ago · 23/07"],
+    ["2026-07-12T14:45:00Z", "Last done: 2 weeks ago · 12/07"],
+    ["2026-05-26T14:45:00Z", "Last done: 2 months ago · 26/05"],
+    [null, "Last done: never"],
+  ];
+  for (const [lastDoneAt, expected] of cases) {
+    await page.evaluate((value) => {
+      window.cardHarness.setLastDone("sensor.time_since_that_scoop_cat_litter", value);
+    }, lastDoneAt);
+    await expect.poll(() => page.evaluate(() => window.cardHarness.details()
+      .find((item) => item.name === "Scoop cat litter").lastDone)).toBe(expected);
+  }
 });
 
 test("card editor offers a chore when switching to one-chore mode", async ({ page }) => {

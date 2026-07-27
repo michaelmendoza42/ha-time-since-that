@@ -12,6 +12,7 @@ from typing import Any
 from .const import (
     DEFAULT_DISPLAY_ROUNDING,
     DEFAULT_DISPLAY_UNIT,
+    RECOMMENDED_UNITS,
     ROUNDING_MODES,
     UNITS,
 )
@@ -20,6 +21,9 @@ UNIT_SECONDS: dict[str, int] = {
     "minutes": 60,
     "hours": 60 * 60,
     "days": 24 * 60 * 60,
+    "weeks": 7 * 24 * 60 * 60,
+    # Recommended cadence is duration-based; one month is intentionally 30 days.
+    "months": 30 * 24 * 60 * 60,
 }
 
 SLUG_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -135,7 +139,7 @@ def validate_chore_definitions(definitions: list[ChoreDefinition]) -> list[Chore
             raise ChoreConfigError(f"Chore '{definition.id}' must have a non-empty name.")
         if definition.recommended_every is not None:
             _validate_positive_value(definition.recommended_every.value, "recommended_every.value")
-            _validate_unit(definition.recommended_every.unit)
+            _validate_unit(definition.recommended_every.unit, RECOMMENDED_UNITS)
         if len(set(definition.tags)) != len(definition.tags):
             raise ChoreConfigError(f"Duplicate tags for chore '{definition.id}'.")
         if any(not tag or tag != tag.strip() or tag != tag.lower() for tag in definition.tags):
@@ -181,7 +185,7 @@ def format_duration(
     """Format seconds into a rounded human duration and numeric value."""
     if seconds is None:
         return None, None
-    _validate_unit(unit)
+    _validate_unit(unit, RECOMMENDED_UNITS)
     if rounding not in ROUNDING_MODES:
         raise ChoreConfigError(f"Invalid rounding '{rounding}'.")
 
@@ -373,9 +377,11 @@ def _validate_positive_value(value: float, field_name: str) -> None:
         raise ChoreConfigError(f"{field_name} must be greater than zero.")
 
 
-def _validate_unit(unit: str) -> None:
-    if unit not in UNITS:
-        raise ChoreConfigError(f"Invalid unit '{unit}'. Supported units: {', '.join(UNITS)}.")
+def _validate_unit(unit: str, supported_units: tuple[str, ...] = UNITS) -> None:
+    if unit not in supported_units:
+        raise ChoreConfigError(
+            f"Invalid unit '{unit}'. Supported units: {', '.join(supported_units)}."
+        )
 
 
 def _plural(unit: str, value: int) -> str:

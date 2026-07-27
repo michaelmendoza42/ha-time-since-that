@@ -51,6 +51,7 @@ SOURCE_BUTTON = "button"
 SOURCE_INITIAL = "initial"
 
 UNITS = ("minutes", "hours", "days")
+RECOMMENDED_UNITS = (*UNITS, "weeks", "months")
 ROUNDING_MODES = ("floor", "ceil", "nearest")
 DEFAULT_DISPLAY_UNIT = "days"
 DEFAULT_DISPLAY_ROUNDING = "floor"

@@ -43,6 +43,63 @@ class TestChoreModel(unittest.TestCase):
         self.assertEqual(definition.elapsed_display.unit, "minutes")
         self.assertEqual(definition.elapsed_display.rounding, "nearest")
 
+    def test_recommended_cadence_supports_weeks_and_fixed_months(self) -> None:
+        expected_seconds = {
+            "weeks": 7 * 24 * 60 * 60,
+            "months": 30 * 24 * 60 * 60,
+        }
+        for unit, seconds in expected_seconds.items():
+            with self.subTest(unit=unit):
+                definition = definition_from_dict(
+                    {
+                        "id": f"cadence_{unit}",
+                        "name": f"Cadence {unit}",
+                        "recommended_every": {"value": 1, "unit": unit},
+                    }
+                )
+                recommended = definition.recommended_every
+                assert recommended is not None
+                self.assertEqual(recommended.seconds, seconds)
+                stored = definition_to_dict(definition)
+                self.assertEqual(stored["recommended_every"], {"value": 1, "unit": unit})
+                self.assertEqual(
+                    definition_from_dict(stored).recommended_every,
+                    recommended,
+                )
+
+    def test_monthly_cadence_snapshot_uses_thirty_day_threshold(self) -> None:
+        definition = definition_from_dict(
+            {
+                "id": "change_filter",
+                "name": "Change filter",
+                "recommended_every": {"value": 1, "unit": "months"},
+            }
+        )
+        now = datetime(2026, 7, 26, 12, tzinfo=timezone.utc)
+        event = CompletionEvent(
+            "one",
+            "change_filter",
+            now - timedelta(days=31),
+        )
+
+        snapshot = build_snapshot(definition, [event], now)
+
+        self.assertEqual(snapshot.attributes["recommended_every"], "1 month")
+        self.assertEqual(snapshot.attributes["recommended_every_unit"], "months")
+        self.assertTrue(snapshot.attributes["over_recommended"])
+        self.assertEqual(snapshot.attributes["over_by"], "1 day")
+
+    def test_elapsed_display_rejects_week_and_month_units(self) -> None:
+        for unit in ("weeks", "months"):
+            with self.subTest(unit=unit), self.assertRaises(ChoreConfigError):
+                definition_from_dict(
+                    {
+                        "id": f"elapsed_{unit}",
+                        "name": f"Elapsed {unit}",
+                        "elapsed_display": {"unit": unit, "rounding": "floor"},
+                    }
+                )
+
     def test_tags_are_normalized_and_exposed_on_snapshot(self) -> None:
         definition = definition_from_dict(
             {

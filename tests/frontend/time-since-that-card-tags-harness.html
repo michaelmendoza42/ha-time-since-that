@@ -28,6 +28,8 @@
               chore_id: "take_bins_out",
               friendly_chore_name: "Take bins out",
               elapsed_value: 7,
+              last_done_at: "2026-07-19T14:45:00Z",
+              recommended_every: "1 week",
               over_recommended: true,
               over_by: "3 days",
               tags: ["household"],
@@ -39,6 +41,8 @@
               chore_id: "scoop_cat_litter",
               friendly_chore_name: "Scoop cat litter",
               elapsed_value: 2,
+              last_done_at: "2026-07-24T14:45:00Z",
+              recommended_every: "2 weeks",
               over_recommended: false,
               tags: ["pets", "daily"],
             },
@@ -49,6 +53,8 @@
               chore_id: "refill_humidifier",
               friendly_chore_name: "Refill humidifier",
               elapsed_value: 12,
+              last_done_at: "2026-07-26T02:45:00Z",
+              recommended_every: "1 month",
               over_recommended: false,
               tags: [],
             },
@@ -64,6 +70,18 @@
           pressed: button.getAttribute("aria-pressed"),
         })),
         names: () => [...card.shadowRoot.querySelectorAll(".item__name")].map((element) => element.textContent),
+        details: () => [...card.shadowRoot.querySelectorAll(".item")].map((item) => ({
+          name: item.querySelector(".item__name").textContent,
+          lastDone: item.querySelector(".item__state").textContent,
+          pills: [...item.querySelectorAll(".pill")].map((pill) => ({
+            text: pill.textContent,
+            label: pill.getAttribute("aria-label"),
+          })),
+        })),
+        setLastDone: (entity, lastDoneAt) => {
+          card._hass.states[entity].attributes.last_done_at = lastDoneAt;
+          card.hass = card._hass;
+        },
         clickFilter: (label) => [...card.shadowRoot.querySelectorAll(".filter-button")].find((button) => button.textContent === label).click(),
         pressFirst: async () => {
           card.shadowRoot.querySelector(".mark-button").click();

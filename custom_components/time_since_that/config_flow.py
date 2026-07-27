@@ -31,6 +31,7 @@ from .const import (
     DEFAULT_DISPLAY_ROUNDING,
     DEFAULT_DISPLAY_UNIT,
     DOMAIN,
+    RECOMMENDED_UNITS,
     ROUNDING_MODES,
     SOURCE_INITIAL,
     UNITS,
@@ -283,7 +284,7 @@ def _chore_form_schema(
         vol.Required(
             CONF_RECOMMENDED_UNIT,
             default=recommended.get(CONF_UNIT, "days"),
-        ): vol.In(UNITS),
+        ): vol.In(RECOMMENDED_UNITS),
         vol.Required(
             CONF_UNIT,
             default=display.get(CONF_UNIT, DEFAULT_DISPLAY_UNIT),

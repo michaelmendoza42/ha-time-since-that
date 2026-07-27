@@ -31,7 +31,7 @@ Open **Settings → Devices & services → Time Since That → Configure**.
 
 Use the menu to:
 
-- **Add chore** — choose a name, optional category/area/tags/cadence, and optional initial last-completed date/time.
+- **Add chore** — choose a name, optional category/area/tags/cadence, and optional initial last-completed date/time. Cadence supports minutes, hours, days, weeks, and fixed 30-day months.
 - **Edit chore** — update display metadata, tags, cadence, and elapsed display.
 - **Adjust last completed** — correct the latest completion timestamp. This changes freshness and interval statistics, so it is deliberately separate from ordinary editing.
 - **Remove chore** — removes active entities after confirmation while retaining v1 history for safety.
@@ -86,7 +86,7 @@ type: custom:time-since-that-card
 title: Time Since That
 ```
 
-The card discovers active chores, shows overdue items first, and offers tag filters.
+The card discovers active chores, shows overdue items first, and offers tag filters. Each row shows adaptive last-completed text (minutes, hours, days, weeks, or months ago) with local `HH:MM` for completions less than 24 hours ago or `DD/MM` for older completions. Recommended cadence is shown as a concise duration such as `2 weeks`.
 
 ### One chore per card
 

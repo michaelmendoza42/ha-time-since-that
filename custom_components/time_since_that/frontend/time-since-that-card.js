@@ -303,6 +303,50 @@ class TimeSinceThatCard extends HTMLElement {
     return button;
   }
 
+  _lastDoneText(lastDoneAt) {
+    if (!lastDoneAt) {
+      return "Last done: never";
+    }
+
+    const doneAt = new Date(lastDoneAt);
+    if (Number.isNaN(doneAt.getTime())) {
+      return "Last done: unknown";
+    }
+
+    const elapsedMs = Math.max(0, Date.now() - doneAt.getTime());
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    let relative;
+    if (elapsedMs < minute) {
+      relative = "just now";
+    } else if (elapsedMs < hour) {
+      relative = this._relativeDuration(elapsedMs, minute, "minute");
+    } else if (elapsedMs < day) {
+      relative = this._relativeDuration(elapsedMs, hour, "hour");
+    } else if (elapsedMs < 7 * day) {
+      relative = this._relativeDuration(elapsedMs, day, "day");
+    } else if (elapsedMs < 30 * day) {
+      relative = this._relativeDuration(elapsedMs, 7 * day, "week");
+    } else {
+      relative = this._relativeDuration(elapsedMs, 30 * day, "month");
+    }
+
+    const exact = elapsedMs < day
+      ? `${this._twoDigits(doneAt.getHours())}:${this._twoDigits(doneAt.getMinutes())}`
+      : `${this._twoDigits(doneAt.getDate())}/${this._twoDigits(doneAt.getMonth() + 1)}`;
+    return `Last done: ${relative} · ${exact}`;
+  }
+
+  _relativeDuration(elapsedMs, unitMs, unit) {
+    const value = Math.max(1, Math.floor(elapsedMs / unitMs));
+    return `${value} ${unit}${value === 1 ? "" : "s"} ago`;
+  }
+
+  _twoDigits(value) {
+    return String(value).padStart(2, "0");
+  }
+
   _renderRow(entry) {
     const stateObj = this._hass?.states?.[entry.entity];
     const row = this._element("article", "item");
@@ -320,7 +364,7 @@ class TimeSinceThatCard extends HTMLElement {
     const text = document.createElement("div");
     text.append(
       this._element("p", "item__name", name),
-      this._element("p", "item__state", stateObj.state || "unknown"),
+      this._element("p", "item__state", this._lastDoneText(attributes.last_done_at)),
       this._metaPills(attributes),
     );
     const button = this._element(
@@ -338,7 +382,11 @@ class TimeSinceThatCard extends HTMLElement {
   _metaPills(attributes) {
     const meta = this._element("div", "meta");
     if (attributes.recommended_every) {
-      meta.append(this._pill(`Recommended ${attributes.recommended_every}`));
+      meta.append(this._pill(
+        attributes.recommended_every,
+        "",
+        `Recommended cadence: ${attributes.recommended_every}`,
+      ));
     }
     if (attributes.over_recommended === true && attributes.over_by) {
       meta.append(this._pill(`Overdue ${attributes.over_by}`, "pill--overdue"));
@@ -353,10 +401,14 @@ class TimeSinceThatCard extends HTMLElement {
     return meta;
   }
 
-  _pill(text, extraClass = "") {
+  _pill(text, extraClass = "", accessibleLabel = "") {
     const pill = this._element("span", "pill", text);
     if (extraClass) {
       pill.classList.add(extraClass);
+    }
+    if (accessibleLabel) {
+      pill.title = accessibleLabel;
+      pill.setAttribute("aria-label", accessibleLabel);
     }
     return pill;
   }
@@ -481,7 +533,7 @@ const CARD_STYLES = `
   .items { display: grid; gap: 12px; }
   .item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px; border: 1px solid var(--divider-color); border-radius: 16px; background: var(--card-background-color); }
   .item__name { margin: 0; color: var(--primary-text-color); font-size: 1rem; font-weight: 650; }
-  .item__state { margin: 4px 0 0; color: var(--primary-text-color); font-size: 1.45rem; font-weight: 760; }
+  .item__state { margin: 4px 0 0; color: var(--primary-text-color); font-size: clamp(1rem, 4vw, 1.25rem); font-weight: 760; }
   .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .pill { display: inline-flex; min-height: 24px; padding: 3px 9px; border-radius: 999px; background: var(--secondary-background-color); color: var(--secondary-text-color); font-size: 0.78rem; }
   .pill--overdue { color: var(--error-color, #db4437); }
