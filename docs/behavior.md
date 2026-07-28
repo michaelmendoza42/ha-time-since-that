@@ -42,6 +42,7 @@ YAML-managed Lovelace resources are read-only to integrations. In that advanced 
 - **One chore mode** displays a selected sensor with one inline Mark done action.
 - Every chore row derives its primary text from `last_done_at`: minutes, hours, days, weeks, or fixed 30-day months ago. It appends local `HH:MM` when completed less than 24 hours ago, otherwise `DD/MM`.
 - Recommended cadence appears as a concise duration-only pill such as `2 weeks`; its tooltip and accessible label identify it as the recommended cadence.
+- Average time between completions appears only after the second completion. With exactly two completions it is their single interval; with more completions it is the mean of every consecutive interval.
 - Filter selection is ephemeral per card view; it does not change chore definitions.
 
 ### Tag filter contract

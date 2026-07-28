@@ -175,6 +175,26 @@ class TestChoreModel(unittest.TestCase):
         self.assertEqual(snapshot.attributes["last_done_by_name"], "Example User")
         self.assertIsNone(snapshot.attributes["average_interval"])
 
+    def test_second_completion_creates_first_average_interval(self) -> None:
+        definition = definition_from_dict(
+            {
+                "id": "water_plants",
+                "name": "Water plants",
+                "elapsed_display": {"unit": "days", "rounding": "nearest"},
+            }
+        )
+        base = datetime(2026, 6, 30, 12, tzinfo=timezone.utc)
+        events = [
+            CompletionEvent("one", "water_plants", base - timedelta(days=9)),
+            CompletionEvent("two", "water_plants", base - timedelta(days=2)),
+        ]
+
+        snapshot = build_snapshot(definition, events, base)
+
+        self.assertEqual(snapshot.attributes["completion_count"], 2)
+        self.assertEqual(snapshot.attributes["average_interval"], "7 days")
+        self.assertEqual(snapshot.attributes["average_interval_seconds"], 7 * 24 * 60 * 60)
+
     def test_household_stats_snapshot(self) -> None:
         definition = definition_from_dict(
             {

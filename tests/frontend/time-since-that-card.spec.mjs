@@ -70,6 +70,14 @@ test("card shows adaptive last-done details and concise cadence", async ({ page 
     .pills.find((pill) => pill.label?.startsWith("Recommended cadence:")));
   expect(cadence).toEqual({ text: "2 weeks", label: "Recommended cadence: 2 weeks" });
 
+  const details = await page.evaluate(() => window.cardHarness.details());
+  expect(details.find((item) => item.name === "Take bins out").pills)
+    .not.toContainEqual(expect.objectContaining({ label: expect.stringContaining("Average time") }));
+  expect(details.find((item) => item.name === "Take bins out").pills)
+    .toContainEqual({ text: "1 completion", label: null });
+  expect(details.find((item) => item.name === "Scoop cat litter").pills)
+    .toContainEqual({ text: "Avg 9 days", label: "Average time between completions: 9 days" });
+
   const cases = [
     ["2026-07-26T14:27:00Z", "Last done: 18 minutes ago · 14:27"],
     ["2026-07-26T11:45:00Z", "Last done: 3 hours ago · 11:45"],

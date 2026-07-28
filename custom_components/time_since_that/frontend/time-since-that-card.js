@@ -391,8 +391,16 @@ class TimeSinceThatCard extends HTMLElement {
     if (attributes.over_recommended === true && attributes.over_by) {
       meta.append(this._pill(`Overdue ${attributes.over_by}`, "pill--overdue"));
     }
+    if (attributes.completion_count >= 2 && attributes.average_interval) {
+      meta.append(this._pill(
+        `Avg ${attributes.average_interval}`,
+        "",
+        `Average time between completions: ${attributes.average_interval}`,
+      ));
+    }
     if (attributes.completion_count !== undefined) {
-      meta.append(this._pill(`${attributes.completion_count} completions`));
+      const completionLabel = attributes.completion_count === 1 ? "completion" : "completions";
+      meta.append(this._pill(`${attributes.completion_count} ${completionLabel}`));
     }
     const tags = Array.isArray(attributes.tags) ? attributes.tags : [];
     for (const tag of tags) {

@@ -86,7 +86,7 @@ type: custom:time-since-that-card
 title: Time Since That
 ```
 
-The card discovers active chores, shows overdue items first, and offers tag filters. Each row shows adaptive last-completed text (minutes, hours, days, weeks, or months ago) with local `HH:MM` for completions less than 24 hours ago or `DD/MM` for older completions. Recommended cadence is shown as a concise duration such as `2 weeks`.
+The card discovers active chores, shows overdue items first, and offers tag filters. Each row shows adaptive last-completed text (minutes, hours, days, weeks, or months ago) with local `HH:MM` for completions less than 24 hours ago or `DD/MM` for older completions. Recommended cadence is shown as a concise duration such as `2 weeks`. After at least two completions, the card also shows the average time between consecutive completions.
 
 ### One chore per card
 
