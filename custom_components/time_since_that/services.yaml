@@ -11,3 +11,23 @@ mark_done:
       required: false
       selector:
         text:
+
+record_completion:
+  name: Record completed date
+  description: Add a completion event at a specified past date and time and recalculate freshness stats.
+  target:
+    entity:
+      integration: time_since_that
+  fields:
+    chore_id:
+      name: Item ID
+      description: Stable item ID from Time Since That configuration. Use this if not targeting an entity.
+      required: false
+      selector:
+        text:
+    completed_at:
+      name: Completed at
+      description: Date and time when the item was completed. Future values are rejected.
+      required: true
+      selector:
+        datetime:

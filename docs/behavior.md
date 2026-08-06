@@ -11,6 +11,7 @@ Version 1 uses UI-managed chore definitions. It deliberately does not import or 
 - **Chore definition**: UI-managed metadata: immutable internal ID, name, optional category/area/tags, recommended cadence, and elapsed display.
 - **Completion event**: a timestamped event recorded by the service, generated button, inline card action, initial last-completed input, or explicit correction.
 - **Initial completion**: an optional past date/time supplied when creating a chore. It creates one event with source `initial`.
+- **Historical completion insertion**: a past-or-current date/time submitted from the card or `record_completion` service. It appends a distinct event and never replaces existing history. Future values are rejected.
 - **Last-completed correction**: an explicit action that changes only the latest completion timestamp, preserving that event's identity and attribution. For a never-completed chore, it creates one initial event instead. It recalculates freshness and interval statistics.
 - **Freshness**: time since the latest completion event.
 - **Recommended cadence**: optional duration-based guidance, not a scheduler. It accepts minutes, hours, days, weeks, and fixed 30-day months.
@@ -30,7 +31,7 @@ Each active chore exposes a freshness sensor and a mark-done button entity.
 
 The v1 history repository uses its own storage namespace and retains event buckets for removed chores. It never reads, writes, imports, or deletes the legacy YAML-era history stores.
 
-Full event history is not exposed as sensor attributes to avoid Recorder bloat.
+Full event history is not exposed as sensor attributes to avoid Recorder bloat. Snapshots sort events chronologically, so inserting an older completion recalculates count and interval statistics without incorrectly replacing the latest completion.
 
 ## Dashboard card
 
@@ -39,7 +40,8 @@ For storage-managed Lovelace resources, the integration persistently registers t
 YAML-managed Lovelace resources are read-only to integrations. In that advanced mode the integration provides a best-effort frontend fallback, but the user must declare the card module in Lovelace YAML for a durable loading guarantee.
 
 - **All chores mode** discovers active Time Since That sensors, sorts overdue first, and offers card-local tag filtering.
-- **One chore mode** displays a selected sensor with one inline Mark done action.
+- **One chore mode** displays a selected sensor with inline Mark done and dated-completion actions.
+- **Enter completed date** opens a local date/time form below Mark done. Saving converts the local value to an ISO timestamp and appends it through `record_completion`; canceling adds nothing.
 - Every chore row derives its primary text from `last_done_at`: minutes, hours, days, weeks, or fixed 30-day months ago. It appends local `HH:MM` when completed less than 24 hours ago, otherwise `DD/MM`.
 - Recommended cadence appears as a concise duration-only pill such as `2 weeks`; its tooltip and accessible label identify it as the recommended cadence.
 - Average time between completions appears only after the second completion. With exactly two completions it is their single interval; with more completions it is the mean of every consecutive interval.

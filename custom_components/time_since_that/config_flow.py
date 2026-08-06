@@ -36,7 +36,12 @@ from .const import (
     SOURCE_INITIAL,
     UNITS,
 )
-from .model import ChoreConfigError, definition_from_dict, definition_to_dict
+from .model import (
+    ChoreConfigError,
+    definition_from_dict,
+    definition_to_dict,
+    required_past_datetime,
+)
 
 CONF_RECOMMENDED_VALUE = "recommended_value"
 CONF_RECOMMENDED_UNIT = "recommended_unit"
@@ -371,14 +376,11 @@ def _initial_datetime(value: Any) -> datetime | None:
 
 def _required_past_datetime(value: Any) -> datetime:
     """Parse a date-time selector result and reject future timestamps."""
-    parsed = dt_util.parse_datetime(str(value))
-    if parsed is None:
-        raise ValueError("invalid datetime")
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
-    if parsed > dt_util.now():
-        raise ValueError("future datetime")
-    return parsed
+    return required_past_datetime(
+        dt_util.parse_datetime(str(value)),
+        default_timezone=dt_util.DEFAULT_TIME_ZONE,
+        now=dt_util.now(),
+    )
 
 
 def _entry_chores(entry: ConfigEntry) -> list[dict[str, Any]]:

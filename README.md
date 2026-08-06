@@ -100,7 +100,7 @@ title: Cat litter
 entity: sensor.time_since_that_scoop_cat_litter
 ```
 
-The card displays that chore plus an inline **Mark done** action.
+The card displays that chore with **Mark done** and **Enter completed date** actions. The latter adds a completion at a chosen past local date and time.
 
 ### Tag filters
 
@@ -129,6 +129,18 @@ service: time_since_that.mark_done
 data:
   chore_id: scoop_cat_litter
 ```
+
+To add a completion that happened earlier without replacing existing history:
+
+```yaml
+service: time_since_that.record_completion
+target:
+  entity_id: sensor.time_since_that_scoop_cat_litter
+data:
+  completed_at: "2026-07-20T10:30:00-04:00"
+```
+
+`completed_at` is required and cannot be in the future. Each call adds a distinct event. Completion count, latest completion, overdue state, and interval statistics are recalculated from chronological history.
 
 ## Privacy
 

@@ -14,20 +14,28 @@ if TYPE_CHECKING:
 from .const import (
     CONF_CHORE_ID,
     CONF_CHORES,
+    CONF_COMPLETED_AT,
     CONF_LAST_COMPLETED,
     DATA_MANAGER,
     DOMAIN,
     SERVICE_MARK_DONE,
+    SERVICE_RECORD_COMPLETION,
     SOURCE_INITIAL,
+    SOURCE_RECORDED_COMPLETION,
 )
 from .frontend_resources import async_reconcile_module_resource, lovelace_resources
-from .model import definition_from_dict, parse_datetime, validate_chore_definitions
+from .model import (
+    definition_from_dict,
+    parse_datetime,
+    required_past_datetime,
+    validate_chore_definitions,
+)
 
 PLATFORMS = ("sensor", "button")
 CARD_FRONTEND_PATH = Path(__file__).parent / "frontend"
 CARD_URL = f"/{DOMAIN}"
 # A versioned URL makes the Companion App fetch a HACS-updated card bundle.
-CARD_VERSION = "1.0.4"
+CARD_VERSION = "1.0.5"
 CARD_JS_URL = f"{CARD_URL}/time-since-that-card.js?v={CARD_VERSION}"
 DATA_FRONTEND_REGISTERED = "frontend_registered"
 
@@ -139,34 +147,66 @@ async def _async_register_frontend(hass: Any) -> None:
 
 
 def _register_services(hass: Any) -> None:
-    """Register the domain service once; resolve the live entry manager per call."""
-    if hass.services.has_service(DOMAIN, SERVICE_MARK_DONE):
-        return
-
+    """Register domain services; resolve the live entry manager per call."""
     import voluptuous as vol
     from homeassistant.const import ATTR_ENTITY_ID
     from homeassistant.helpers import config_validation as cv
+    from homeassistant.util import dt as dt_util
 
-    mark_done_schema = vol.Schema(
-        {
-            vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
-            vol.Optional(CONF_CHORE_ID): cv.string,
-        }
-    )
+    target_fields = {
+        vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
+        vol.Optional(CONF_CHORE_ID): cv.string,
+    }
 
-    async def async_mark_done(call: Any) -> None:
-        manager = hass.data.get(DOMAIN, {}).get(DATA_MANAGER)
-        if manager is None:
-            raise vol.Invalid("Time Since That is not configured.")
-        for chore_id in _chore_ids_from_call(call.data, manager):
-            await manager.async_mark_done(chore_id, call.context, source="service")
+    if not hass.services.has_service(DOMAIN, SERVICE_MARK_DONE):
+        async def async_mark_done(call: Any) -> None:
+            manager = hass.data.get(DOMAIN, {}).get(DATA_MANAGER)
+            if manager is None:
+                raise vol.Invalid("Time Since That is not configured.")
+            for chore_id in _chore_ids_from_call(call.data, manager):
+                await manager.async_mark_done(chore_id, call.context, source="service")
 
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_MARK_DONE,
-        async_mark_done,
-        schema=mark_done_schema,
-    )
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_MARK_DONE,
+            async_mark_done,
+            schema=vol.Schema(target_fields),
+        )
+
+    if not hass.services.has_service(DOMAIN, SERVICE_RECORD_COMPLETION):
+        async def async_record_completion(call: Any) -> None:
+            manager = hass.data.get(DOMAIN, {}).get(DATA_MANAGER)
+            if manager is None:
+                raise vol.Invalid("Time Since That is not configured.")
+            try:
+                completed_at = required_past_datetime(
+                    dt_util.parse_datetime(str(call.data[CONF_COMPLETED_AT])),
+                    default_timezone=dt_util.DEFAULT_TIME_ZONE,
+                    now=dt_util.now(),
+                )
+            except (TypeError, ValueError) as err:
+                raise vol.Invalid(
+                    "completed_at must be a valid date and time that is not in the future."
+                ) from err
+            for chore_id in _chore_ids_from_call(call.data, manager):
+                await manager.async_mark_done(
+                    chore_id,
+                    call.context,
+                    source=SOURCE_RECORDED_COMPLETION,
+                    done_at=completed_at,
+                )
+
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_RECORD_COMPLETION,
+            async_record_completion,
+            schema=vol.Schema(
+                {
+                    **target_fields,
+                    vol.Required(CONF_COMPLETED_AT): cv.string,
+                }
+            ),
+        )
 
 
 def _chore_ids_from_call(data: dict[str, Any], manager: Any) -> list[str]: 

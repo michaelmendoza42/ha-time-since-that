@@ -11,6 +11,7 @@ from custom_components.time_since_that.model import (
     definition_to_dict,
     build_snapshot,
     format_duration,
+    required_past_datetime,
     validate_chore_definitions,
 )
 
@@ -140,6 +141,25 @@ class TestChoreModel(unittest.TestCase):
         self.assertEqual(format_duration(90 * 60, "hours", "ceil"), ("2 hours", 2))
         self.assertEqual(format_duration(90 * 60, "hours", "nearest"), ("2 hours", 2))
 
+    def test_required_past_datetime_normalizes_local_and_rejects_future(self) -> None:
+        local_timezone = timezone(timedelta(hours=-4))
+        now = datetime(2026, 7, 26, 12, tzinfo=timezone.utc)
+        normalized = required_past_datetime(
+            datetime(2026, 7, 20, 10, 30),
+            default_timezone=local_timezone,
+            now=now,
+        )
+
+        self.assertEqual(normalized.utcoffset(), timedelta(hours=-4))
+        with self.assertRaisesRegex(ValueError, "future datetime"):
+            required_past_datetime(
+                now + timedelta(seconds=1),
+                default_timezone=local_timezone,
+                now=now,
+            )
+        with self.assertRaisesRegex(ValueError, "invalid datetime"):
+            required_past_datetime(None, default_timezone=local_timezone, now=now)
+
     def test_never_done_snapshot(self) -> None:
         definition = definition_from_dict({"id": "vacuum", "name": "Vacuum"})
         snapshot = build_snapshot(definition, [], datetime(2026, 6, 30, tzinfo=timezone.utc))
@@ -174,6 +194,32 @@ class TestChoreModel(unittest.TestCase):
         self.assertEqual(snapshot.attributes["over_by"], "1 day")
         self.assertEqual(snapshot.attributes["last_done_by_name"], "Example User")
         self.assertIsNone(snapshot.attributes["average_interval"])
+
+    def test_historical_insertion_recalculates_chronological_intervals(self) -> None:
+        definition = definition_from_dict(
+            {
+                "id": "clean_windows",
+                "name": "Clean windows",
+                "elapsed_display": {"unit": "days", "rounding": "nearest"},
+            }
+        )
+        base = datetime(2026, 7, 10, 12, tzinfo=timezone.utc)
+        events = [
+            CompletionEvent("first", "clean_windows", base - timedelta(days=9)),
+            CompletionEvent("latest", "clean_windows", base - timedelta(days=1)),
+            CompletionEvent("backfill", "clean_windows", base - timedelta(days=6)),
+        ]
+
+        snapshot = build_snapshot(definition, events, base)
+
+        self.assertEqual(snapshot.attributes["completion_count"], 3)
+        self.assertEqual(
+            snapshot.attributes["last_done_at"],
+            (base - timedelta(days=1)).isoformat(),
+        )
+        self.assertEqual(snapshot.attributes["average_interval"], "4 days")
+        self.assertEqual(snapshot.attributes["shortest_interval"], "3 days")
+        self.assertEqual(snapshot.attributes["longest_interval"], "5 days")
 
     def test_second_completion_creates_first_average_interval(self) -> None:
         definition = definition_from_dict(

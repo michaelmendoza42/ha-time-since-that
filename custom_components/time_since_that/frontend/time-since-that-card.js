@@ -7,6 +7,10 @@ class TimeSinceThatCard extends HTMLElement {
     this._config = {};
     this._hass = undefined;
     this._pendingEntityId = undefined;
+    this._dateEntryEntityId = undefined;
+    this._dateEntryValues = new Map();
+    this._focusDateEntityId = undefined;
+    this._focusDateTarget = undefined;
     this._error = undefined;
     this._selectedFilters = new Set();
     this._previousFilterKeys = new Set();
@@ -209,6 +213,68 @@ class TimeSinceThatCard extends HTMLElement {
     }
   }
 
+  _toggleDateEntry(entityId) {
+    if (this._pendingEntityId) {
+      return;
+    }
+    if (this._dateEntryEntityId === entityId) {
+      this._dateEntryEntityId = undefined;
+      this._dateEntryValues.delete(entityId);
+      this._requestDateFocus(entityId, "toggle");
+    } else {
+      this._dateEntryEntityId = entityId;
+      this._requestDateFocus(entityId, "input");
+    }
+    this._error = undefined;
+    this._render();
+  }
+
+  async _recordCompletion(entityId) {
+    if (!this._hass || this._pendingEntityId) {
+      return;
+    }
+    const value = this._dateEntryValues.get(entityId) || "";
+    const completedAt = new Date(value);
+    if (!value || Number.isNaN(completedAt.getTime())) {
+      this._error = "Choose a valid completed date and time.";
+      this._requestDateFocus(entityId, "input");
+      this._render();
+      return;
+    }
+    if (completedAt.getTime() > Date.now()) {
+      this._error = "Completed date and time cannot be in the future.";
+      this._requestDateFocus(entityId, "input");
+      this._render();
+      return;
+    }
+
+    this._pendingEntityId = entityId;
+    this._error = undefined;
+    this._render();
+    try {
+      await this._hass.callService("time_since_that", "record_completion", {
+        entity_id: entityId,
+        completed_at: completedAt.toISOString(),
+      });
+      this._dateEntryEntityId = undefined;
+      this._dateEntryValues.delete(entityId);
+    } catch (error) {
+      this._error = error?.message || "Could not record completed date.";
+    } finally {
+      this._pendingEntityId = undefined;
+      this._requestDateFocus(
+        entityId,
+        this._dateEntryEntityId === entityId ? "input" : "toggle",
+      );
+      this._render();
+    }
+  }
+
+  _requestDateFocus(entityId, target) {
+    this._focusDateEntityId = entityId;
+    this._focusDateTarget = target;
+  }
+
   _render() {
     if (!this.shadowRoot) {
       return;
@@ -266,6 +332,19 @@ class TimeSinceThatCard extends HTMLElement {
       const key = this._focusFilterKey;
       this._focusFilterKey = undefined;
       queueMicrotask(() => this.shadowRoot.querySelector(`[data-filter-key="${key}"]`)?.focus());
+    }
+    if (this._focusDateEntityId && this._focusDateTarget) {
+      const entityId = this._focusDateEntityId;
+      const target = this._focusDateTarget;
+      this._focusDateEntityId = undefined;
+      this._focusDateTarget = undefined;
+      queueMicrotask(() => {
+        const control = target === "input"
+          ? this.shadowRoot.querySelector(`#${this._dateInputId(entityId)}`)
+          : [...this.shadowRoot.querySelectorAll(".date-toggle-button")]
+            .find((button) => button.dataset.entityId === entityId);
+        control?.focus();
+      });
     }
   }
 
@@ -347,6 +426,51 @@ class TimeSinceThatCard extends HTMLElement {
     return String(value).padStart(2, "0");
   }
 
+  _dateInputId(entityId) {
+    return `completed-at-${String(entityId).replace(/[^a-z0-9_-]/gi, "-")}`;
+  }
+
+  _dateEntry(entityId, name) {
+    const form = this._element("form", "date-entry");
+    const inputId = this._dateInputId(entityId);
+    const label = this._element("label", "date-entry__label", "Completed date and time");
+    label.htmlFor = inputId;
+    const input = this._element("input", "date-entry__input");
+    input.id = inputId;
+    input.name = "completed_at";
+    input.type = "datetime-local";
+    input.required = true;
+    input.disabled = Boolean(this._pendingEntityId);
+    input.max = this._localDateTimeValue(new Date());
+    input.value = this._dateEntryValues.get(entityId) || "";
+    input.setAttribute("aria-label", `Completed date and time for ${name}`);
+    input.addEventListener("input", () => this._dateEntryValues.set(entityId, input.value));
+
+    const buttons = this._element("div", "date-entry__buttons");
+    const save = this._element(
+      "button",
+      "date-save-button",
+      this._pendingEntityId === entityId ? "Saving" : "Save completion",
+    );
+    save.type = "submit";
+    save.disabled = Boolean(this._pendingEntityId);
+    const cancel = this._element("button", "date-cancel-button", "Cancel");
+    cancel.type = "button";
+    cancel.disabled = Boolean(this._pendingEntityId);
+    cancel.addEventListener("click", () => this._toggleDateEntry(entityId));
+    buttons.append(save, cancel);
+    form.append(label, input, buttons);
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this._recordCompletion(entityId);
+    });
+    return form;
+  }
+
+  _localDateTimeValue(date) {
+    return `${date.getFullYear()}-${this._twoDigits(date.getMonth() + 1)}-${this._twoDigits(date.getDate())}T${this._twoDigits(date.getHours())}:${this._twoDigits(date.getMinutes())}`;
+  }
+
   _renderRow(entry) {
     const stateObj = this._hass?.states?.[entry.entity];
     const row = this._element("article", "item");
@@ -367,15 +491,27 @@ class TimeSinceThatCard extends HTMLElement {
       this._element("p", "item__state", this._lastDoneText(attributes.last_done_at)),
       this._metaPills(attributes),
     );
+    const actions = this._element("div", "item__actions");
     const button = this._element(
       "button",
       "mark-button",
       this._pendingEntityId === entry.entity ? "Saving" : "Mark done",
     );
     button.type = "button";
-    button.disabled = this._pendingEntityId === entry.entity;
+    button.disabled = Boolean(this._pendingEntityId);
     button.addEventListener("click", () => this._markDone(entry.entity));
-    row.append(text, button);
+    const dateButton = this._element("button", "date-toggle-button", "Enter completed date");
+    dateButton.type = "button";
+    dateButton.disabled = Boolean(this._pendingEntityId);
+    dateButton.dataset.entityId = entry.entity;
+    dateButton.setAttribute("aria-expanded", String(this._dateEntryEntityId === entry.entity));
+    dateButton.setAttribute("aria-label", `Enter completed date for ${name}`);
+    dateButton.addEventListener("click", () => this._toggleDateEntry(entry.entity));
+    actions.append(button, dateButton);
+    if (this._dateEntryEntityId === entry.entity) {
+      actions.append(this._dateEntry(entry.entity, name));
+    }
+    row.append(text, actions);
     return row;
   }
 
@@ -533,11 +669,11 @@ const CARD_STYLES = `
   h2 { margin: 0; color: var(--primary-text-color); font-size: 1.25rem; font-weight: 650; }
   .subtitle { margin: 5px 0 0; color: var(--secondary-text-color); font-size: 0.9rem; }
   .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
-  .filter-button, .mark-button { border: 0; cursor: pointer; font: inherit; }
+  .filter-button, .mark-button, .date-toggle-button, .date-save-button, .date-cancel-button { border: 0; cursor: pointer; font: inherit; }
   .filter-button { border: 1px solid var(--divider-color); border-radius: 999px; background: var(--card-background-color); color: var(--primary-text-color); padding: 7px 11px; }
   .filter-button--selected { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color); }
   .filter-button--mixed { border-color: var(--primary-color); color: var(--primary-color); }
-  .filter-button:focus-visible, .mark-button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+  .filter-button:focus-visible, .mark-button:focus-visible, .date-toggle-button:focus-visible, .date-save-button:focus-visible, .date-cancel-button:focus-visible, .date-entry__input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
   .items { display: grid; gap: 12px; }
   .item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px; border: 1px solid var(--divider-color); border-radius: 16px; background: var(--card-background-color); }
   .item__name { margin: 0; color: var(--primary-text-color); font-size: 1rem; font-weight: 650; }
@@ -546,11 +682,18 @@ const CARD_STYLES = `
   .pill { display: inline-flex; min-height: 24px; padding: 3px 9px; border-radius: 999px; background: var(--secondary-background-color); color: var(--secondary-text-color); font-size: 0.78rem; }
   .pill--overdue { color: var(--error-color, #db4437); }
   .pill--tag { color: var(--primary-color); }
-  .mark-button { min-width: 106px; min-height: 42px; border-radius: 999px; background: var(--primary-color); color: var(--text-primary-color); font-size: 0.9rem; font-weight: 650; padding: 0 16px; }
-  .mark-button[disabled] { cursor: wait; opacity: 0.65; }
+  .item__actions { display: grid; gap: 8px; min-width: 190px; }
+  .mark-button, .date-toggle-button, .date-save-button, .date-cancel-button { min-height: 42px; border-radius: 999px; font-size: 0.9rem; font-weight: 650; padding: 0 16px; }
+  .mark-button, .date-save-button { background: var(--primary-color); color: var(--text-primary-color); }
+  .date-toggle-button, .date-cancel-button { border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); }
+  .date-entry { display: grid; gap: 8px; margin-top: 4px; }
+  .date-entry__label { color: var(--secondary-text-color); font-size: 0.8rem; }
+  .date-entry__input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 8px; border: 1px solid var(--divider-color); border-radius: 8px; background: var(--card-background-color); color: var(--primary-text-color); font: inherit; }
+  .date-entry__buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mark-button[disabled], .date-toggle-button[disabled], .date-save-button[disabled], .date-cancel-button[disabled] { cursor: wait; opacity: 0.65; }
   .empty-state, .card-error { margin: 14px 0 0; color: var(--secondary-text-color); }
   .card-error, .missing { color: var(--error-color, #db4437); }
-  @media (max-width: 520px) { .item { grid-template-columns: 1fr; } .mark-button { width: 100%; } }
+  @media (max-width: 520px) { .item { grid-template-columns: 1fr; } .item__actions { width: 100%; } }
 `;
 
 const EDITOR_STYLES = `

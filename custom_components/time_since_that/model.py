@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, tzinfo
 import math
 import re
 from statistics import mean, median
@@ -122,6 +122,23 @@ def parse_datetime(value: str) -> datetime:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed
+
+
+def required_past_datetime(
+    value: datetime | None,
+    *,
+    default_timezone: tzinfo,
+    now: datetime,
+) -> datetime:
+    """Require an aware date-time that is not later than now."""
+    if value is None:
+        raise ValueError("invalid datetime")
+    normalized = value if value.tzinfo is not None else value.replace(tzinfo=default_timezone)
+    if now.tzinfo is None:
+        raise ValueError("current datetime must be timezone-aware")
+    if normalized > now:
+        raise ValueError("future datetime")
+    return normalized
 
 
 def validate_chore_definitions(definitions: list[ChoreDefinition]) -> list[ChoreDefinition]:

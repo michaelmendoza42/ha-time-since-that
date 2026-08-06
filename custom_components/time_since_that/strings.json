@@ -106,6 +106,20 @@
           "description": "Stable item ID from Time Since That configuration."
         }
       }
+    },
+    "record_completion": {
+      "name": "Record completed date",
+      "description": "Add a completion event at a specified past date and time and recalculate freshness stats.",
+      "fields": {
+        "chore_id": {
+          "name": "Item ID",
+          "description": "Stable item ID from Time Since That configuration."
+        },
+        "completed_at": {
+          "name": "Completed at",
+          "description": "Date and time when the item was completed. Future values are rejected."
+        }
+      }
     }
   }
 }

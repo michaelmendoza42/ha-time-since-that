@@ -9,6 +9,7 @@ VERSION = "1.0.0"
 CONF_CHORES = "chores"
 CONF_TAGS = "tags"
 CONF_LAST_COMPLETED = "last_completed"
+CONF_COMPLETED_AT = "completed_at"
 CONF_CHORE_ID = "chore_id"
 CONF_NAME = "name"
 CONF_CATEGORY = "category"
@@ -45,8 +46,10 @@ ATTR_LONGEST_INTERVAL = "longest_interval"
 DATA_MANAGER = "manager"
 
 SERVICE_MARK_DONE = "mark_done"
+SERVICE_RECORD_COMPLETION = "record_completion"
 
 SOURCE_SERVICE = "service"
+SOURCE_RECORDED_COMPLETION = "record_completion"
 SOURCE_BUTTON = "button"
 SOURCE_INITIAL = "initial"
 
