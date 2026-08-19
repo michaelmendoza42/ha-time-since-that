@@ -1,4 +1,11 @@
 const NO_TAG_FILTER = "__time_since_that_no_tag__";
+const ALL_FILTER = "__time_since_that_all__";
+const SORT_OPTIONS = [
+  ["due-asc", "Due date: soonest first"],
+  ["due-desc", "Due date: latest first"],
+  ["interval-asc", "Recommended interval: shortest first"],
+  ["interval-desc", "Recommended interval: longest first"],
+];
 
 class TimeSinceThatCard extends HTMLElement {
   constructor() {
@@ -16,6 +23,12 @@ class TimeSinceThatCard extends HTMLElement {
     this._previousFilterKeys = new Set();
     this._filtersInitialized = false;
     this._focusFilterKey = undefined;
+    this._sort = "due-asc";
+    this._historyByEntity = new Map();
+    this._historyOpenEntityId = undefined;
+    this._historyLoadingEntityId = undefined;
+    this._historyEditEventId = undefined;
+    this._historyEditValues = new Map();
   }
 
   setConfig(config) {
@@ -34,6 +47,9 @@ class TimeSinceThatCard extends HTMLElement {
         typeof entry === "string" ? { entity: entry } : entry,
       ),
     };
+    this._sort = SORT_OPTIONS.some(([value]) => value === config.sort)
+      ? config.sort
+      : "due-asc";
     this._render();
   }
 
@@ -60,39 +76,61 @@ class TimeSinceThatCard extends HTMLElement {
 
   _sourceEntries() {
     if (this._config.entity) {
-      return [{ entity: this._config.entity }];
+      return this._sortEntries([{ entity: this._config.entity }]);
     }
     if (this._config.entities) {
-      return this._config.entities;
+      return this._sortEntries(this._config.entities);
     }
 
-    return Object.entries(this._hass?.states || {})
+    return this._sortEntries(Object.entries(this._hass?.states || {})
       .filter(
         ([entityId, stateObj]) =>
           entityId.startsWith("sensor.time_since_that_") &&
           Boolean(stateObj.attributes?.chore_id),
       )
-      .map(([entity]) => ({ entity }))
-      .sort((left, right) => this._compareEntries(left, right));
+      .map(([entity]) => ({ entity })));
+  }
+
+  _sortEntries(entries) {
+    return [...entries].sort((left, right) => this._compareEntries(left, right));
   }
 
   _compareEntries(left, right) {
-    const leftState = this._hass.states[left.entity];
-    const rightState = this._hass.states[right.entity];
-    const overdueDelta =
-      Number(rightState.attributes.over_recommended === true) -
-      Number(leftState.attributes.over_recommended === true);
-    if (overdueDelta) {
-      return overdueDelta;
+    const leftValue = this._sortValue(left);
+    const rightValue = this._sortValue(right);
+    if (leftValue === null || rightValue === null) {
+      if (leftValue === rightValue) {
+        return this._compareNames(left, right);
+      }
+      return leftValue === null ? 1 : -1;
     }
-    const elapsedDelta =
-      Number(rightState.attributes.elapsed_value || 0) -
-      Number(leftState.attributes.elapsed_value || 0);
-    if (elapsedDelta) {
-      return elapsedDelta;
+    const direction = this._sort.endsWith("-desc") ? -1 : 1;
+    const valueDelta = (leftValue - rightValue) * direction;
+    return valueDelta || this._compareNames(left, right);
+  }
+
+  _sortValue(entry) {
+    const attributes = this._hass?.states?.[entry.entity]?.attributes || {};
+    if (this._sort.startsWith("interval")) {
+      const value = Number(attributes.recommended_every_value);
+      const unit = attributes.recommended_every_unit;
+      const unitMs = { minutes: 60_000, hours: 3_600_000, days: 86_400_000, weeks: 604_800_000, months: 2_592_000_000 }[unit];
+      return Number.isFinite(value) && value > 0 && unitMs ? value * unitMs : null;
     }
-    return String(leftState.attributes.friendly_chore_name || left.entity).localeCompare(
-      String(rightState.attributes.friendly_chore_name || right.entity),
+    const lastDoneAt = new Date(attributes.last_done_at).getTime();
+    const cadenceValue = Number(attributes.recommended_every_value);
+    const cadenceUnit = attributes.recommended_every_unit;
+    const cadenceMs = { minutes: 60_000, hours: 3_600_000, days: 86_400_000, weeks: 604_800_000, months: 2_592_000_000 }[cadenceUnit];
+    return Number.isFinite(lastDoneAt) && Number.isFinite(cadenceValue) && cadenceValue > 0 && cadenceMs
+      ? lastDoneAt + cadenceValue * cadenceMs
+      : null;
+  }
+
+  _compareNames(left, right) {
+    const leftState = this._hass?.states?.[left.entity];
+    const rightState = this._hass?.states?.[right.entity];
+    return String(leftState?.attributes?.friendly_chore_name || left.entity).localeCompare(
+      String(rightState?.attributes?.friendly_chore_name || right.entity),
     );
   }
 
@@ -123,25 +161,17 @@ class TimeSinceThatCard extends HTMLElement {
 
   _reconcileFilters(filters) {
     const current = new Set(filters);
-    const wasComplete =
-      this._previousFilterKeys.size > 0 &&
-      [...this._previousFilterKeys].every((key) => this._selectedFilters.has(key));
-
     if (!this._filtersInitialized && current.size > 0) {
-      this._selectedFilters = new Set(current);
+      this._selectedFilters = new Set([ALL_FILTER]);
       this._filtersInitialized = true;
-    } else if (current.size > 0) {
+    } else if (current.size > 0 && !this._selectedFilters.has(ALL_FILTER)) {
       this._selectedFilters = new Set(
         [...this._selectedFilters].filter((key) => current.has(key)),
       );
-      if (wasComplete) {
-        this._selectedFilters = new Set(current);
-      }
-    } else {
+    } else if (current.size === 0) {
       this._selectedFilters.clear();
       this._filtersInitialized = false;
     }
-
     this._previousFilterKeys = current;
   }
 
@@ -153,6 +183,9 @@ class TimeSinceThatCard extends HTMLElement {
 
     const filters = this._filters(source);
     this._reconcileFilters(filters);
+    if (this._selectedFilters.has(ALL_FILTER)) {
+      return { entries: source, filters, source };
+    }
     if (this._selectedFilters.size === 0) {
       return { entries: [], filters, source, empty: "none_selected" };
     }
@@ -168,24 +201,19 @@ class TimeSinceThatCard extends HTMLElement {
   }
 
   _allState(filters) {
-    if (!filters.length || this._selectedFilters.size === 0) {
-      return "false";
-    }
-    return filters.every((key) => this._selectedFilters.has(key)) ? "true" : "mixed";
+    return filters.length && this._selectedFilters.has(ALL_FILTER) ? "true" : "false";
   }
 
-  _toggleAll(filters) {
-    if (this._allState(filters) === "true") {
-      this._selectedFilters.clear();
-    } else {
-      this._selectedFilters = new Set(filters);
-    }
+  _toggleAll() {
+    this._selectedFilters = new Set([ALL_FILTER]);
     this._focusFilterKey = "all";
     this._render();
   }
 
   _toggleFilter(key) {
-    if (this._selectedFilters.has(key)) {
+    if (this._selectedFilters.has(ALL_FILTER)) {
+      this._selectedFilters = new Set([key]);
+    } else if (this._selectedFilters.has(key)) {
       this._selectedFilters.delete(key);
     } else {
       this._selectedFilters.add(key);
@@ -205,6 +233,8 @@ class TimeSinceThatCard extends HTMLElement {
       await this._hass.callService("time_since_that", "mark_done", {
         entity_id: entityId,
       });
+      this._historyByEntity.delete(entityId);
+      this._historyOpenEntityId = undefined;
     } catch (error) {
       this._error = error?.message || "Could not mark item done.";
     } finally {
@@ -258,6 +288,8 @@ class TimeSinceThatCard extends HTMLElement {
       });
       this._dateEntryEntityId = undefined;
       this._dateEntryValues.delete(entityId);
+      this._historyByEntity.delete(entityId);
+      this._historyOpenEntityId = undefined;
     } catch (error) {
       this._error = error?.message || "Could not record completed date.";
     } finally {
@@ -301,6 +333,9 @@ class TimeSinceThatCard extends HTMLElement {
 
     if (!this._isSingleMode() && this._config.show_tag_filters !== false && filters.length) {
       wrap.append(this._renderFilters(filters));
+    }
+    if (!this._isSingleMode()) {
+      wrap.append(this._renderSort());
     }
 
     const items = this._element("div", "items");
@@ -353,7 +388,7 @@ class TimeSinceThatCard extends HTMLElement {
     group.setAttribute("role", "group");
     group.setAttribute("aria-label", "Filter chores by tag");
     const all = this._filterButton("all", "All", this._allState(filters));
-    all.addEventListener("click", () => this._toggleAll(filters));
+    all.addEventListener("click", () => this._toggleAll());
     group.append(all);
     for (const filter of filters) {
       const label = filter === NO_TAG_FILTER ? "No tag" : filter;
@@ -366,6 +401,22 @@ class TimeSinceThatCard extends HTMLElement {
       group.append(button);
     }
     return group;
+  }
+
+  _renderSort() {
+    const label = this._element("label", "sort-control", "Sort chores");
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", "Sort chores");
+    for (const [value, text] of SORT_OPTIONS) {
+      select.append(new Option(text, value));
+    }
+    select.value = this._sort;
+    select.addEventListener("change", () => {
+      this._sort = select.value;
+      this._render();
+    });
+    label.append(select);
+    return label;
   }
 
   _filterButton(key, label, state) {
@@ -430,6 +481,149 @@ class TimeSinceThatCard extends HTMLElement {
     return `completed-at-${String(entityId).replace(/[^a-z0-9_-]/gi, "-")}`;
   }
 
+  _historyInputId(eventId) {
+    return `completion-history-${String(eventId).replace(/[^a-z0-9_-]/gi, "-")}`;
+  }
+
+  _connection() {
+    return this._hass?.connection?.sendMessagePromise?.bind(this._hass.connection);
+  }
+
+  async _toggleHistory(entityId) {
+    if (this._historyOpenEntityId === entityId) {
+      this._historyOpenEntityId = undefined;
+      this._historyEditEventId = undefined;
+      this._render();
+      return;
+    }
+    this._historyOpenEntityId = entityId;
+    this._historyEditEventId = undefined;
+    this._error = undefined;
+    if (this._historyByEntity.has(entityId)) {
+      this._render();
+      return;
+    }
+    const sendMessage = this._connection();
+    if (!sendMessage) {
+      this._error = "Completion history requires a Home Assistant WebSocket connection.";
+      this._render();
+      return;
+    }
+    this._historyLoadingEntityId = entityId;
+    this._render();
+    try {
+      const result = await sendMessage({ type: "time_since_that/completion_history", entity_id: entityId });
+      this._historyByEntity.set(entityId, Array.isArray(result?.events) ? result.events : []);
+    } catch (error) {
+      this._error = error?.message || "Could not load completion history.";
+    } finally {
+      this._historyLoadingEntityId = undefined;
+      this._render();
+    }
+  }
+
+  _toggleHistoryEdit(event) {
+    if (this._pendingEntityId) {
+      return;
+    }
+    if (this._historyEditEventId === event.event_id) {
+      this._historyEditEventId = undefined;
+      this._historyEditValues.delete(event.event_id);
+    } else {
+      this._historyEditEventId = event.event_id;
+      this._historyEditValues.set(event.event_id, this._localDateTimeValue(new Date(event.completed_at)));
+    }
+    this._error = undefined;
+    this._render();
+  }
+
+  async _updateCompletion(entityId, eventId) {
+    const value = this._historyEditValues.get(eventId) || "";
+    const completedAt = new Date(value);
+    if (!value || Number.isNaN(completedAt.getTime()) || completedAt.getTime() > Date.now()) {
+      this._error = "Choose a valid completed date and time that is not in the future.";
+      this._render();
+      return;
+    }
+    const sendMessage = this._connection();
+    if (!sendMessage) {
+      this._error = "Completion history requires a Home Assistant WebSocket connection.";
+      this._render();
+      return;
+    }
+    this._pendingEntityId = entityId;
+    this._error = undefined;
+    this._render();
+    try {
+      const result = await sendMessage({
+        type: "time_since_that/update_completion",
+        entity_id: entityId,
+        event_id: eventId,
+        completed_at: completedAt.toISOString(),
+      });
+      const events = this._historyByEntity.get(entityId) || [];
+      this._historyByEntity.set(entityId, events
+        .map((event) => event.event_id === eventId ? result : event)
+        .sort((left, right) => new Date(right.completed_at) - new Date(left.completed_at)));
+      this._historyEditEventId = undefined;
+      this._historyEditValues.delete(eventId);
+    } catch (error) {
+      this._error = error?.message || "Could not update completed date.";
+    } finally {
+      this._pendingEntityId = undefined;
+      this._render();
+    }
+  }
+
+  _renderHistory(entityId, name) {
+    const history = this._element("section", "completion-history");
+    history.setAttribute("aria-label", `Completed dates for ${name}`);
+    if (this._historyLoadingEntityId === entityId) {
+      history.append(this._element("p", "subtitle", "Loading completed dates…"));
+      return history;
+    }
+    const events = this._historyByEntity.get(entityId) || [];
+    if (!events.length) {
+      history.append(this._element("p", "subtitle", "No completed dates yet."));
+      return history;
+    }
+    const list = this._element("ol", "completion-history__list");
+    for (const event of events) {
+      const item = this._element("li", "completion-history__item");
+      const date = new Date(event.completed_at);
+      item.append(this._element("time", "completion-history__date", Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleString()));
+      const edit = this._element("button", "history-edit-button", "Edit");
+      edit.type = "button";
+      edit.disabled = Boolean(this._pendingEntityId);
+      edit.addEventListener("click", () => this._toggleHistoryEdit(event));
+      item.append(edit);
+      if (this._historyEditEventId === event.event_id) {
+        const form = this._element("form", "history-edit-form");
+        const input = this._element("input", "date-entry__input");
+        input.id = this._historyInputId(event.event_id);
+        input.type = "datetime-local";
+        input.step = "1";
+        input.required = true;
+        input.max = this._localDateTimeValue(new Date());
+        input.value = this._historyEditValues.get(event.event_id) || "";
+        input.setAttribute("aria-label", `Completed date and time for ${name}`);
+        input.addEventListener("input", () => this._historyEditValues.set(event.event_id, input.value));
+        const save = this._element("button", "history-save-button", this._pendingEntityId ? "Saving" : "Save");
+        save.type = "submit";
+        save.disabled = Boolean(this._pendingEntityId);
+        form.append(input, save);
+        form.addEventListener("submit", (eventSubmit) => {
+          eventSubmit.preventDefault();
+          this._updateCompletion(entityId, event.event_id);
+        });
+        item.append(form);
+      }
+      list.append(item);
+    }
+    history.append(list);
+    return history;
+  }
+
   _dateEntry(entityId, name) {
     const form = this._element("form", "date-entry");
     const inputId = this._dateInputId(entityId);
@@ -468,7 +662,7 @@ class TimeSinceThatCard extends HTMLElement {
   }
 
   _localDateTimeValue(date) {
-    return `${date.getFullYear()}-${this._twoDigits(date.getMonth() + 1)}-${this._twoDigits(date.getDate())}T${this._twoDigits(date.getHours())}:${this._twoDigits(date.getMinutes())}`;
+    return `${date.getFullYear()}-${this._twoDigits(date.getMonth() + 1)}-${this._twoDigits(date.getDate())}T${this._twoDigits(date.getHours())}:${this._twoDigits(date.getMinutes())}:${this._twoDigits(date.getSeconds())}`;
   }
 
   _renderRow(entry) {
@@ -507,9 +701,18 @@ class TimeSinceThatCard extends HTMLElement {
     dateButton.setAttribute("aria-expanded", String(this._dateEntryEntityId === entry.entity));
     dateButton.setAttribute("aria-label", `Enter completed date for ${name}`);
     dateButton.addEventListener("click", () => this._toggleDateEntry(entry.entity));
-    actions.append(button, dateButton);
+    const historyButton = this._element("button", "history-toggle-button", "View completed dates");
+    historyButton.type = "button";
+    historyButton.disabled = Boolean(this._pendingEntityId);
+    historyButton.setAttribute("aria-expanded", String(this._historyOpenEntityId === entry.entity));
+    historyButton.setAttribute("aria-label", `View completed dates for ${name}`);
+    historyButton.addEventListener("click", () => this._toggleHistory(entry.entity));
+    actions.append(button, dateButton, historyButton);
     if (this._dateEntryEntityId === entry.entity) {
       actions.append(this._dateEntry(entry.entity, name));
+    }
+    if (this._historyOpenEntityId === entry.entity) {
+      actions.append(this._renderHistory(entry.entity, name));
     }
     row.append(text, actions);
     return row;
@@ -669,11 +872,13 @@ const CARD_STYLES = `
   h2 { margin: 0; color: var(--primary-text-color); font-size: 1.25rem; font-weight: 650; }
   .subtitle { margin: 5px 0 0; color: var(--secondary-text-color); font-size: 0.9rem; }
   .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
-  .filter-button, .mark-button, .date-toggle-button, .date-save-button, .date-cancel-button { border: 0; cursor: pointer; font: inherit; }
+  .sort-control { display: grid; gap: 4px; margin: 0 0 16px; color: var(--secondary-text-color); font-size: 0.8rem; }
+  .sort-control select { min-height: 38px; border: 1px solid var(--divider-color); border-radius: 8px; background: var(--card-background-color); color: var(--primary-text-color); font: inherit; }
+  .filter-button, .mark-button, .date-toggle-button, .history-toggle-button, .date-save-button, .date-cancel-button, .history-edit-button, .history-save-button { border: 0; cursor: pointer; font: inherit; }
   .filter-button { border: 1px solid var(--divider-color); border-radius: 999px; background: var(--card-background-color); color: var(--primary-text-color); padding: 7px 11px; }
   .filter-button--selected { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color); }
   .filter-button--mixed { border-color: var(--primary-color); color: var(--primary-color); }
-  .filter-button:focus-visible, .mark-button:focus-visible, .date-toggle-button:focus-visible, .date-save-button:focus-visible, .date-cancel-button:focus-visible, .date-entry__input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+  .filter-button:focus-visible, .sort-control select:focus-visible, .mark-button:focus-visible, .date-toggle-button:focus-visible, .history-toggle-button:focus-visible, .date-save-button:focus-visible, .date-cancel-button:focus-visible, .history-edit-button:focus-visible, .history-save-button:focus-visible, .date-entry__input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
   .items { display: grid; gap: 12px; }
   .item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px; border: 1px solid var(--divider-color); border-radius: 16px; background: var(--card-background-color); }
   .item__name { margin: 0; color: var(--primary-text-color); font-size: 1rem; font-weight: 650; }
@@ -683,14 +888,20 @@ const CARD_STYLES = `
   .pill--overdue { color: var(--error-color, #db4437); }
   .pill--tag { color: var(--primary-color); }
   .item__actions { display: grid; gap: 8px; min-width: 190px; }
-  .mark-button, .date-toggle-button, .date-save-button, .date-cancel-button { min-height: 42px; border-radius: 999px; font-size: 0.9rem; font-weight: 650; padding: 0 16px; }
-  .mark-button, .date-save-button { background: var(--primary-color); color: var(--text-primary-color); }
-  .date-toggle-button, .date-cancel-button { border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); }
+  .mark-button, .date-toggle-button, .history-toggle-button, .date-save-button, .date-cancel-button { min-height: 42px; border-radius: 999px; font-size: 0.9rem; font-weight: 650; padding: 0 16px; }
+  .mark-button, .date-save-button, .history-save-button { background: var(--primary-color); color: var(--text-primary-color); }
+  .date-toggle-button, .history-toggle-button, .date-cancel-button, .history-edit-button { border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); }
+  .completion-history { display: grid; gap: 8px; padding-top: 4px; }
+  .completion-history__list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .completion-history__item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+  .completion-history__date { color: var(--secondary-text-color); font-size: 0.85rem; }
+  .history-edit-button, .history-save-button { min-height: 34px; border-radius: 999px; padding: 0 12px; }
+  .history-edit-form { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
   .date-entry { display: grid; gap: 8px; margin-top: 4px; }
   .date-entry__label { color: var(--secondary-text-color); font-size: 0.8rem; }
   .date-entry__input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 8px; border: 1px solid var(--divider-color); border-radius: 8px; background: var(--card-background-color); color: var(--primary-text-color); font: inherit; }
   .date-entry__buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .mark-button[disabled], .date-toggle-button[disabled], .date-save-button[disabled], .date-cancel-button[disabled] { cursor: wait; opacity: 0.65; }
+  .mark-button[disabled], .date-toggle-button[disabled], .history-toggle-button[disabled], .date-save-button[disabled], .date-cancel-button[disabled], .history-edit-button[disabled], .history-save-button[disabled] { cursor: wait; opacity: 0.65; }
   .empty-state, .card-error { margin: 14px 0 0; color: var(--secondary-text-color); }
   .card-error, .missing { color: var(--error-color, #db4437); }
   @media (max-width: 520px) { .item { grid-template-columns: 1fr; } .item__actions { width: 100%; } }

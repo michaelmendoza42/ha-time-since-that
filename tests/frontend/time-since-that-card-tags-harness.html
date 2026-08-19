@@ -18,6 +18,13 @@
     <time-since-that-card id="card"></time-since-that-card>
     <script>
       const calls = [];
+      const historyCalls = [];
+      const completionHistory = {
+        "sensor.time_since_that_scoop_cat_litter": [
+          { event_id: "litter-recent", completed_at: "2026-07-24T14:45:00Z" },
+          { event_id: "litter-earlier", completed_at: "2026-07-15T14:45:00Z" },
+        ],
+      };
       const card = document.querySelector("#card");
       card.setConfig({ title: "Household" });
       card.hass = {
@@ -30,6 +37,8 @@
               elapsed_value: 7,
               last_done_at: "2026-07-19T14:45:00Z",
               recommended_every: "1 week",
+              recommended_every_value: 1,
+              recommended_every_unit: "weeks",
               completion_count: 1,
               average_interval: null,
               over_recommended: true,
@@ -45,6 +54,8 @@
               elapsed_value: 2,
               last_done_at: "2026-07-24T14:45:00Z",
               recommended_every: "2 weeks",
+              recommended_every_value: 2,
+              recommended_every_unit: "weeks",
               completion_count: 2,
               average_interval: "9 days",
               over_recommended: false,
@@ -59,6 +70,8 @@
               elapsed_value: 12,
               last_done_at: "2026-07-26T02:45:00Z",
               recommended_every: "1 month",
+              recommended_every_value: 1,
+              recommended_every_unit: "months",
               completion_count: 3,
               average_interval: "12 days",
               over_recommended: false,
@@ -67,10 +80,27 @@
           },
         },
         callService: async (...args) => calls.push(args),
+        connection: {
+          sendMessagePromise: async (message) => {
+            historyCalls.push(message);
+            if (message.type === "time_since_that/completion_history") {
+              return { events: completionHistory[message.entity_id] || [] };
+            }
+            if (message.type === "time_since_that/update_completion") {
+              const events = completionHistory[message.entity_id] || [];
+              const index = events.findIndex((event) => event.event_id === message.event_id);
+              const updated = { event_id: message.event_id, completed_at: message.completed_at };
+              if (index >= 0) events[index] = updated;
+              return updated;
+            }
+            throw new Error("Unexpected WebSocket command");
+          },
+        },
       };
       window.cardHarness = {
         card,
         calls,
+        historyCalls,
         filterState: () => [...card.shadowRoot.querySelectorAll(".filter-button")].map((button) => ({
           label: button.textContent,
           pressed: button.getAttribute("aria-pressed"),

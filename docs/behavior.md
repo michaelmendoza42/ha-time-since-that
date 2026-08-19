@@ -12,7 +12,7 @@ Version 1 uses UI-managed chore definitions. It deliberately does not import or 
 - **Completion event**: a timestamped event recorded by the service, generated button, inline card action, initial last-completed input, or explicit correction.
 - **Initial completion**: an optional past date/time supplied when creating a chore. It creates one event with source `initial`.
 - **Historical completion insertion**: a past-or-current date/time submitted from the card or `record_completion` service. It appends a distinct event and never replaces existing history. Future values are rejected.
-- **Last-completed correction**: an explicit action that changes only the latest completion timestamp, preserving that event's identity and attribution. For a never-completed chore, it creates one initial event instead. It recalculates freshness and interval statistics.
+- **Completion-date correction**: an explicit action changes one identified completion timestamp while preserving that event's identity and attribution. The Settings flow corrects the latest event; the card history view can correct any event. It recalculates freshness and interval statistics.
 - **Freshness**: time since the latest completion event.
 - **Recommended cadence**: optional duration-based guidance, not a scheduler. It accepts minutes, hours, days, weeks, and fixed 30-day months.
 - **Tags**: normalized lowercase labels used by aggregate card filters. Category is separate metadata.
@@ -31,7 +31,7 @@ Each active chore exposes a freshness sensor and a mark-done button entity.
 
 The v1 history repository uses its own storage namespace and retains event buckets for removed chores. It never reads, writes, imports, or deletes the legacy YAML-era history stores.
 
-Full event history is not exposed as sensor attributes to avoid Recorder bloat. Snapshots sort events chronologically, so inserting an older completion recalculates count and interval statistics without incorrectly replacing the latest completion.
+Full event history is not exposed as sensor attributes to avoid Recorder bloat. The authenticated card WebSocket API retrieves it on demand instead. Snapshots sort events chronologically, so inserting or correcting an older completion recalculates count and interval statistics without incorrectly replacing the latest completion.
 
 ## Dashboard card
 
@@ -39,9 +39,10 @@ For storage-managed Lovelace resources, the integration persistently registers t
 
 YAML-managed Lovelace resources are read-only to integrations. In that advanced mode the integration provides a best-effort frontend fallback, but the user must declare the card module in Lovelace YAML for a durable loading guarantee.
 
-- **All chores mode** discovers active Time Since That sensors, sorts overdue first, and offers card-local tag filtering.
-- **One chore mode** displays a selected sensor with inline Mark done and dated-completion actions.
+- **All chores mode** discovers active Time Since That sensors, defaults to due date ascending (overdue dates first), and offers card-local tag filtering plus due-date and recommended-cadence sort controls.
+- **One chore mode** displays a selected sensor with inline Mark done, dated-completion, and completed-date history actions.
 - **Enter completed date** opens a local date/time form below Mark done. Saving converts the local value to an ISO timestamp and appends it through `record_completion`; canceling adds nothing.
+- **View completed dates** retrieves a chore's event dates through an authenticated WebSocket command without adding history to its sensor attributes. Each event can be edited in place; future dates are rejected.
 - Every chore row derives its primary text from `last_done_at`: minutes, hours, days, weeks, or fixed 30-day months ago. It appends local `HH:MM` when completed less than 24 hours ago, otherwise `DD/MM`.
 - Recommended cadence appears as a concise duration-only pill such as `2 weeks`; its tooltip and accessible label identify it as the recommended cadence.
 - Average time between completions appears only after the second completion. With exactly two completions it is their single interval; with more completions it is the mean of every consecutive interval.
@@ -50,9 +51,8 @@ YAML-managed Lovelace resources are read-only to integrations. In that advanced 
 ### Tag filter contract
 
 - `All` is a synthetic aggregate control, not a stored tag.
-- A selected `All` represents every available real tag plus `No tag` when untagged chores exist.
-- Deselecting selected `All` clears every filter and displays no chores.
-- Deselecting an individual filter when All is selected removes only that filter and makes All mixed.
-- Re-selecting the final missing filter restores All.
-- Multiple selected tags use OR matching.
+- `All` is selected by default and shows every chore.
+- `All` is exclusive: choosing it clears every individual selection.
+- Choosing an individual filter while All is selected disables All and selects only that filter.
+- Multiple individual selections use OR matching.
 - `No tag` matches only chores with an empty tags list.

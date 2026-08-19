@@ -74,24 +74,41 @@ class TimeSinceThatHistoryRepository:
 
     async def async_replace_latest(self, chore_id: str, done_at: datetime) -> CompletionEvent:
         """Correct the latest event while preserving its identity and attribution."""
+        events = self._events.get(chore_id, [])
+        if not events:
+            raise ValueError(f"Chore '{chore_id}' has no completion to adjust.")
+        latest = max(events, key=lambda event: event.done_at)
+        return await self.async_replace_event(chore_id, latest.event_id, done_at)
+
+    async def async_replace_event(
+        self, chore_id: str, event_id: str, done_at: datetime
+    ) -> CompletionEvent:
+        """Correct one event and restore memory if persistence fails."""
         async with self._lock:
             events = self._events.get(chore_id, [])
-            if not events:
-                raise ValueError(f"Chore '{chore_id}' has no completion to adjust.")
-            latest_index = max(range(len(events)), key=lambda index: events[index].done_at)
-            latest = events[latest_index]
-            corrected = CompletionEvent(
-                event_id=latest.event_id,
-                chore_id=latest.chore_id,
-                done_at=done_at,
-                user_id=latest.user_id,
-                user_name=latest.user_name,
-                context_id=latest.context_id,
-                context_parent_id=latest.context_parent_id,
-                source=latest.source,
+            event_index = next(
+                (index for index, event in enumerate(events) if event.event_id == event_id),
+                None,
             )
-            events[latest_index] = corrected
-            await self._async_save()
+            if event_index is None:
+                raise ValueError(f"Chore '{chore_id}' has no completion '{event_id}'.")
+            original = events[event_index]
+            corrected = CompletionEvent(
+                event_id=original.event_id,
+                chore_id=original.chore_id,
+                done_at=done_at,
+                user_id=original.user_id,
+                user_name=original.user_name,
+                context_id=original.context_id,
+                context_parent_id=original.context_parent_id,
+                source=original.source,
+            )
+            events[event_index] = corrected
+            try:
+                await self._async_save()
+            except Exception:
+                events[event_index] = original
+                raise
             return corrected
 
     async def _async_save(self) -> None:
@@ -153,6 +170,26 @@ class TimeSinceThatManager:
         await self._history.async_append(event)
         self._notify_listeners()
         return event
+
+    def completion_history(self, chore_id: str) -> list[CompletionEvent]:
+        """Return one chore's events newest first for the dashboard history view."""
+        if chore_id not in self.definitions:
+            raise ValueError(f"Unknown chore id '{chore_id}'.")
+        return sorted(
+            self._history.events_for(chore_id),
+            key=lambda event: event.done_at,
+            reverse=True,
+        )
+
+    async def async_adjust_completion(
+        self, chore_id: str, event_id: str, done_at: datetime
+    ) -> CompletionEvent:
+        """Correct one identified completion timestamp."""
+        if chore_id not in self.definitions:
+            raise ValueError(f"Unknown chore id '{chore_id}'.")
+        corrected = await self._history.async_replace_event(chore_id, event_id, done_at)
+        self._notify_listeners()
+        return corrected
 
     async def async_adjust_last_completed(
         self,

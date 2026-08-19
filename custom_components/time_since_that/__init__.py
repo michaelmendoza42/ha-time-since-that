@@ -35,7 +35,7 @@ PLATFORMS = ("sensor", "button")
 CARD_FRONTEND_PATH = Path(__file__).parent / "frontend"
 CARD_URL = f"/{DOMAIN}"
 # A versioned URL makes the Companion App fetch a HACS-updated card bundle.
-CARD_VERSION = "1.0.5"
+CARD_VERSION = "1.0.6"
 CARD_JS_URL = f"{CARD_URL}/time-since-that-card.js?v={CARD_VERSION}"
 DATA_FRONTEND_REGISTERED = "frontend_registered"
 
@@ -62,6 +62,9 @@ async def async_setup(hass: Any, config: dict[str, Any]) -> bool:
         )
 
     _register_services(hass)
+    from .websocket_api import async_register_websocket_commands
+
+    async_register_websocket_commands(hass)
     if not domain_data.get(DATA_FRONTEND_REGISTERED):
         await _async_register_frontend(hass)
         domain_data[DATA_FRONTEND_REGISTERED] = True

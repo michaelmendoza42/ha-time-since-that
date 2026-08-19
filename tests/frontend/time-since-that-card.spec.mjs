@@ -37,28 +37,82 @@ test.afterAll(async () => {
   await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
 });
 
-test("aggregate card applies All, soft-deselect, and tag filters", async ({ page }) => {
+test("aggregate card makes All exclusive and supports multiple tag filters", async ({ page }) => {
   await page.goto(`http://127.0.0.1:${PORT}/tests/frontend/time-since-that-card-tags-harness.html`);
 
   await expect.poll(() => page.evaluate(() => window.cardHarness.filterState())).toEqual([
     { label: "All", pressed: "true" },
-    { label: "daily", pressed: "true" },
-    { label: "household", pressed: "true" },
-    { label: "pets", pressed: "true" },
-    { label: "No tag", pressed: "true" },
+    { label: "daily", pressed: "false" },
+    { label: "household", pressed: "false" },
+    { label: "pets", pressed: "false" },
+    { label: "No tag", pressed: "false" },
   ]);
 
   await page.evaluate(() => window.cardHarness.clickFilter("pets"));
-  await expect.poll(() => page.evaluate(() => window.cardHarness.filterState()[0].pressed)).toBe("mixed");
-
-  await page.evaluate(() => window.cardHarness.clickFilter("All"));
-  await expect.poll(() => page.evaluate(() => window.cardHarness.filterState()[0].pressed)).toBe("true");
-
-  await page.evaluate(() => window.cardHarness.clickFilter("All"));
-  await expect.poll(() => page.evaluate(() => window.cardHarness.names())).toEqual([]);
-
-  await page.evaluate(() => window.cardHarness.clickFilter("pets"));
+  await expect.poll(() => page.evaluate(() => window.cardHarness.filterState())).toEqual([
+    { label: "All", pressed: "false" },
+    { label: "daily", pressed: "false" },
+    { label: "household", pressed: "false" },
+    { label: "pets", pressed: "true" },
+    { label: "No tag", pressed: "false" },
+  ]);
   await expect.poll(() => page.evaluate(() => window.cardHarness.names())).toEqual(["Scoop cat litter"]);
+
+  await page.evaluate(() => window.cardHarness.clickFilter("daily"));
+  await expect.poll(() => page.evaluate(() => window.cardHarness.filterState()[2].pressed)).toBe("false");
+  await expect.poll(() => page.evaluate(() => window.cardHarness.filterState()[1].pressed)).toBe("true");
+
+  await page.evaluate(() => window.cardHarness.clickFilter("All"));
+  await expect.poll(() => page.evaluate(() => window.cardHarness.filterState())).toEqual([
+    { label: "All", pressed: "true" },
+    { label: "daily", pressed: "false" },
+    { label: "household", pressed: "false" },
+    { label: "pets", pressed: "false" },
+    { label: "No tag", pressed: "false" },
+  ]);
+  await expect.poll(() => page.evaluate(() => window.cardHarness.names())).toEqual([
+    "Take bins out", "Scoop cat litter", "Refill humidifier",
+  ]);
+});
+
+test("aggregate card sorts by due date and recommended interval", async ({ page }) => {
+  await page.goto(`http://127.0.0.1:${PORT}/tests/frontend/time-since-that-card-tags-harness.html`);
+  const sort = page.getByLabel("Sort chores");
+  await expect.poll(() => page.evaluate(() => window.cardHarness.names())).toEqual([
+    "Take bins out", "Scoop cat litter", "Refill humidifier",
+  ]);
+
+  await sort.selectOption("due-desc");
+  await expect.poll(() => page.evaluate(() => window.cardHarness.names())).toEqual([
+    "Refill humidifier", "Scoop cat litter", "Take bins out",
+  ]);
+  await sort.selectOption("interval-desc");
+  await expect.poll(() => page.evaluate(() => window.cardHarness.names())).toEqual([
+    "Refill humidifier", "Scoop cat litter", "Take bins out",
+  ]);
+  await sort.selectOption("interval-asc");
+  await expect.poll(() => page.evaluate(() => window.cardHarness.names())).toEqual([
+    "Take bins out", "Scoop cat litter", "Refill humidifier",
+  ]);
+});
+
+test("card views and edits individual completed dates", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-07-26T14:45:00Z"));
+  await page.goto(`http://127.0.0.1:${PORT}/tests/frontend/time-since-that-card-tags-harness.html`);
+  await page.getByRole("button", { name: "View completed dates for Scoop cat litter" }).click();
+  await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls)).toEqual([
+    { type: "time_since_that/completion_history", entity_id: "sensor.time_since_that_scoop_cat_litter" },
+  ]);
+  await expect(page.getByRole("button", { name: "Edit" }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Edit" }).first().click();
+  await page.getByLabel("Completed date and time for Scoop cat litter").fill("2026-07-23T10:30");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls[1])).toEqual({
+    type: "time_since_that/update_completion",
+    entity_id: "sensor.time_since_that_scoop_cat_litter",
+    event_id: "litter-recent",
+    completed_at: "2026-07-23T10:30:00.000Z",
+  });
 });
 
 test("card shows adaptive last-done details and concise cadence", async ({ page }) => {

@@ -86,7 +86,7 @@ type: custom:time-since-that-card
 title: Time Since That
 ```
 
-The card discovers active chores, shows overdue items first, and offers tag filters. Each row shows adaptive last-completed text (minutes, hours, days, weeks, or months ago) with local `HH:MM` for completions less than 24 hours ago or `DD/MM` for older completions. Recommended cadence is shown as a concise duration such as `2 weeks`. After at least two completions, the card also shows the average time between consecutive completions.
+The card discovers active chores, defaults to due date ascending (so overdue chores appear first), and offers tag filters plus due-date and recommended-cadence sort controls in both directions. Each row shows adaptive last-completed text (minutes, hours, days, weeks, or months ago) with local `HH:MM` for completions less than 24 hours ago or `DD/MM` for older completions. Recommended cadence is shown as a concise duration such as `2 weeks`. After at least two completions, the card also shows the average time between consecutive completions.
 
 ### One chore per card
 
@@ -100,17 +100,16 @@ title: Cat litter
 entity: sensor.time_since_that_scoop_cat_litter
 ```
 
-The card displays that chore with **Mark done** and **Enter completed date** actions. The latter adds a completion at a chosen past local date and time.
+The card displays that chore with **Mark done**, **Enter completed date**, and **View completed dates** actions. The latter opens every stored completion date for the chore; each date can be corrected in place. History is fetched on demand through the authenticated Home Assistant WebSocket connection and is not added to sensor attributes.
 
 ### Tag filters
 
 Aggregate cards show `All`, every real tag, and `No tag` when needed.
 
-- Initially, **All** is selected.
-- Select one or more tags to show chores with **any** selected tag.
-- Select **No tag** to show untagged chores.
-- Tap selected **All** to deselect every filter and show no chores.
-- When All is selected, deselecting one tag soft-deselects All while keeping other filters selected.
+- Initially, **All** is selected and shows every chore.
+- **All** is exclusive: selecting it clears individual filters.
+- Selecting an individual tag or **No tag** disables All and selects that filter.
+- Select further individual filters to show chores with **any** selected tag.
 
 ## Service
 
