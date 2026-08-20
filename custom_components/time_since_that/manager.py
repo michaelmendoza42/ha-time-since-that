@@ -15,7 +15,13 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import SOURCE_INITIAL, STORAGE_KEY, STORAGE_VERSION
-from .model import ChoreDefinition, ChoreSnapshot, CompletionEvent, build_snapshot
+from .model import (
+    ChoreDefinition,
+    ChoreSnapshot,
+    CompletionEvent,
+    build_snapshot,
+    required_past_datetime,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -187,6 +193,11 @@ class TimeSinceThatManager:
         """Correct one identified completion timestamp."""
         if chore_id not in self.definitions:
             raise ValueError(f"Unknown chore id '{chore_id}'.")
+        done_at = required_past_datetime(
+            done_at,
+            default_timezone=dt_util.DEFAULT_TIME_ZONE,
+            now=dt_util.now(),
+        )
         corrected = await self._history.async_replace_event(chore_id, event_id, done_at)
         self._notify_listeners()
         return corrected
@@ -199,6 +210,11 @@ class TimeSinceThatManager:
         """Correct one chore's latest completion timestamp."""
         if chore_id not in self.definitions:
             raise ValueError(f"Unknown chore id '{chore_id}'.")
+        done_at = required_past_datetime(
+            done_at,
+            default_timezone=dt_util.DEFAULT_TIME_ZONE,
+            now=dt_util.now(),
+        )
         if not self._history.events_for(chore_id):
             return await self.async_mark_done(
                 chore_id,
