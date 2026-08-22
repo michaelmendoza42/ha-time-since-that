@@ -13,6 +13,7 @@ Version 1 uses UI-managed chore definitions. It deliberately does not import or 
 - **Initial completion**: an optional past date/time supplied when creating a chore. It creates one event with source `initial`.
 - **Historical completion insertion**: a past-or-current date/time submitted from the card or `record_completion` service. It appends a distinct event and never replaces existing history. Future values are rejected.
 - **Completion-date correction**: an explicit action changes one identified completion timestamp while preserving that event's identity and attribution. The Settings flow corrects the latest event; the card history view can correct any event. It recalculates freshness and interval statistics.
+- **Completion deletion**: an explicit card-history action permanently removes one identified event after confirmation. It recalculates freshness and interval statistics.
 - **Freshness**: time since the latest completion event.
 - **Recommended cadence**: optional duration-based guidance, not a scheduler. It accepts minutes, hours, days, weeks, and fixed 30-day months.
 - **Tags**: normalized lowercase labels used by aggregate card filters. Category is separate metadata.
@@ -42,7 +43,7 @@ YAML-managed Lovelace resources are read-only to integrations. In that advanced 
 - **All chores mode** discovers active Time Since That sensors, defaults to due date ascending (overdue dates first), and offers card-local tag filtering plus due-date and recommended-cadence sort controls.
 - **One chore mode** displays a selected sensor with inline Mark done, dated-completion, and completed-date history actions.
 - **Enter completed date** opens a local date/time form below Mark done. Saving converts the local value to an ISO timestamp and appends it through `record_completion`; canceling adds nothing.
-- **View completed dates** retrieves a chore's event dates through an authenticated WebSocket command without adding history to its sensor attributes. Each event can be edited in place; future dates are rejected.
+- The `X completions` pill opens a chore's completed dates through an authenticated WebSocket command without adding history to its sensor attributes. Clicking a date opens a prefilled local date/time editor: Save replaces it and Cancel preserves it. Each date also has a separate delete action with confirmation; edits and deletions recalculate freshness and interval statistics.
 - Every chore row derives its primary text from `last_done_at`: minutes, hours, days, weeks, or fixed 30-day months ago. It appends local `HH:MM` when completed less than 24 hours ago, otherwise `DD/MM`.
 - Recommended cadence appears as a concise duration-only pill such as `2 weeks`; its tooltip and accessible label identify it as the recommended cadence.
 - Average time between completions appears only after the second completion. With exactly two completions it is their single interval; with more completions it is the mean of every consecutive interval.

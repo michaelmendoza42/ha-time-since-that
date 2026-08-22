@@ -96,15 +96,23 @@ test("aggregate card sorts by due date and recommended interval", async ({ page 
   ]);
 });
 
-test("card views and edits individual completed dates", async ({ page }) => {
+test("completion count opens dates that can be cancelled, edited, and deleted", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-07-26T14:45:00Z"));
   await page.goto(`http://127.0.0.1:${PORT}/tests/frontend/time-since-that-card-tags-harness.html`);
   await page.getByRole("button", { name: "View completed dates for Scoop cat litter" }).click();
   await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls)).toEqual([
     { type: "time_since_that/completion_history", entity_id: "sensor.time_since_that_scoop_cat_litter" },
   ]);
-  await expect(page.getByRole("button", { name: "Edit" }).first()).toBeVisible();
-  await page.getByRole("button", { name: "Edit" }).first().click();
+  const firstDate = page.locator(".completion-history__date").first();
+  await firstDate.click();
+  const input = page.getByLabel("Completed date and time for Scoop cat litter");
+  await input.fill("2026-07-23T10:30");
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(input).toHaveCount(0);
+  await expect(firstDate).toBeFocused();
+  await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls)).toHaveLength(1);
+
+  await firstDate.click();
   await page.getByLabel("Completed date and time for Scoop cat litter").fill("2026-07-23T10:30");
   await page.getByRole("button", { name: "Save" }).click();
   await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls[1])).toEqual({
@@ -113,6 +121,22 @@ test("card views and edits individual completed dates", async ({ page }) => {
     event_id: "litter-recent",
     completed_at: "2026-07-23T10:30:00.000Z",
   });
+
+  await page.evaluate(() => {
+    window.confirm = (message) => {
+      window.confirmMessage = message;
+      return true;
+    };
+  });
+  await page.locator(".history-delete-button").first().click();
+  await expect.poll(() => page.evaluate(() => window.confirmMessage))
+    .toContain("This permanently removes the completion");
+  await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls[2])).toEqual({
+    type: "time_since_that/delete_completion",
+    entity_id: "sensor.time_since_that_scoop_cat_litter",
+    event_id: "litter-recent",
+  });
+  await expect(page.locator(".completion-history__date")).toHaveCount(1);
 });
 
 test("card shows adaptive last-done details and concise cadence", async ({ page }) => {
@@ -128,7 +152,7 @@ test("card shows adaptive last-done details and concise cadence", async ({ page 
   expect(details.find((item) => item.name === "Take bins out").pills)
     .not.toContainEqual(expect.objectContaining({ label: expect.stringContaining("Average time") }));
   expect(details.find((item) => item.name === "Take bins out").pills)
-    .toContainEqual({ text: "1 completion", label: null });
+    .toContainEqual({ text: "1 completion", label: "View completed dates for Take bins out" });
   expect(details.find((item) => item.name === "Scoop cat litter").pills)
     .toContainEqual({ text: "Avg 9 days", label: "Average time between completions: 9 days" });
 

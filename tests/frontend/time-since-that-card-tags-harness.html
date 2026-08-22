@@ -93,6 +93,11 @@
               if (index >= 0) events[index] = updated;
               return updated;
             }
+            if (message.type === "time_since_that/delete_completion") {
+              const events = completionHistory[message.entity_id] || [];
+              completionHistory[message.entity_id] = events.filter((event) => event.event_id !== message.event_id);
+              return { event_id: message.event_id };
+            }
             throw new Error("Unexpected WebSocket command");
           },
         },

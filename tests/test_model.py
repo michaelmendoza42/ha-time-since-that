@@ -241,6 +241,32 @@ class TestChoreModel(unittest.TestCase):
         self.assertEqual(snapshot.attributes["average_interval"], "7 days")
         self.assertEqual(snapshot.attributes["average_interval_seconds"], 7 * 24 * 60 * 60)
 
+    def test_deleting_a_completion_recalculates_statistics(self) -> None:
+        definition = definition_from_dict(
+            {
+                "id": "clean_windows",
+                "name": "Clean windows",
+                "elapsed_display": {"unit": "days", "rounding": "nearest"},
+            }
+        )
+        base = datetime(2026, 7, 10, 12, tzinfo=timezone.utc)
+        events = [
+            CompletionEvent("first", "clean_windows", base - timedelta(days=9)),
+            CompletionEvent("middle", "clean_windows", base - timedelta(days=6)),
+            CompletionEvent("latest", "clean_windows", base - timedelta(days=1)),
+        ]
+
+        snapshot = build_snapshot(
+            definition,
+            [event for event in events if event.event_id != "middle"],
+            base,
+        )
+
+        self.assertEqual(snapshot.attributes["completion_count"], 2)
+        self.assertEqual(snapshot.attributes["average_interval"], "8 days")
+        self.assertEqual(snapshot.attributes["shortest_interval"], "8 days")
+        self.assertEqual(snapshot.attributes["longest_interval"], "8 days")
+
     def test_household_stats_snapshot(self) -> None:
         definition = definition_from_dict(
             {

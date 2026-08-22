@@ -18,6 +18,7 @@ from .model import required_past_datetime
 
 WS_GET_COMPLETION_HISTORY = f"{DOMAIN}/completion_history"
 WS_UPDATE_COMPLETION = f"{DOMAIN}/update_completion"
+WS_DELETE_COMPLETION = f"{DOMAIN}/delete_completion"
 
 
 def _manager_for_entity(hass: HomeAssistant, entity_id: str) -> Any:
@@ -98,7 +99,30 @@ async def websocket_update_completion(
     )
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_DELETE_COMPLETION,
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("event_id"): cv.string,
+    }
+)
+@websocket_api.async_response
+async def websocket_delete_completion(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Delete one completion selected from the card history view."""
+    try:
+        _require_entity_permission(connection, msg["entity_id"], POLICY_CONTROL)
+        manager, chore_id = _manager_for_entity(hass, msg["entity_id"])
+        removed = await manager.async_delete_completion(chore_id, msg["event_id"])
+    except ValueError as err:
+        connection.send_error(msg["id"], "invalid_completion", str(err))
+        return
+    connection.send_result(msg["id"], {"event_id": removed.event_id})
+
+
 def async_register_websocket_commands(hass: HomeAssistant) -> None:
     """Register the authenticated commands used by the bundled dashboard card."""
     websocket_api.async_register_command(hass, websocket_get_completion_history)
     websocket_api.async_register_command(hass, websocket_update_completion)
+    websocket_api.async_register_command(hass, websocket_delete_completion)

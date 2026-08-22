@@ -44,6 +44,12 @@ class _Manager:
         self.updated = (chore_id, event_id, completed_at)
         return SimpleNamespace(event_id=event_id, done_at=completed_at)
 
+    async def async_delete_completion(
+        self, chore_id: str, event_id: str
+    ) -> SimpleNamespace:
+        self.deleted = (chore_id, event_id)
+        return SimpleNamespace(event_id=event_id)
+
 
 class TestCompletionHistoryWebSocket(unittest.TestCase):
     def _modules(self, now: datetime) -> dict[str, ModuleType]:
@@ -118,6 +124,15 @@ class TestCompletionHistoryWebSocket(unittest.TestCase):
                     "completed_at": "2026-07-20T10:30:00Z",
                 },
             ))
+            asyncio.run(websocket.websocket_delete_completion(
+                hass,
+                connection,
+                {
+                    "id": 3,
+                    "entity_id": "sensor.time_since_that_scoop_cat_litter",
+                    "event_id": "event-2",
+                },
+            ))
         self.assertEqual(connection.errors, [])
         self.assertEqual(connection.results[0], (1, {"events": [
             {"event_id": "event-2", "completed_at": "2026-07-24T14:45:00+00:00"},
@@ -128,6 +143,8 @@ class TestCompletionHistoryWebSocket(unittest.TestCase):
         self.assertEqual(connection.results[1], (2, {
             "event_id": "event-2", "completed_at": "2026-07-20T10:30:00+00:00",
         }))
+        self.assertEqual(manager.deleted, ("scoop_cat_litter", "event-2"))
+        self.assertEqual(connection.results[2], (3, {"event_id": "event-2"}))
 
 
 if __name__ == "__main__":

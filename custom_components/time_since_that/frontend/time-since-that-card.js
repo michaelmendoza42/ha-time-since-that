@@ -29,6 +29,8 @@ class TimeSinceThatCard extends HTMLElement {
     this._historyLoadingEntityId = undefined;
     this._historyEditEventId = undefined;
     this._historyEditValues = new Map();
+    this._focusHistoryEventId = undefined;
+    this._focusHistoryTarget = undefined;
   }
 
   setConfig(config) {
@@ -381,6 +383,19 @@ class TimeSinceThatCard extends HTMLElement {
         control?.focus();
       });
     }
+    if (this._focusHistoryEventId && this._focusHistoryTarget) {
+      const eventId = this._focusHistoryEventId;
+      const target = this._focusHistoryTarget;
+      this._focusHistoryEventId = undefined;
+      this._focusHistoryTarget = undefined;
+      queueMicrotask(() => {
+        const control = target === "input"
+          ? this.shadowRoot.querySelector(`#${this._historyInputId(eventId)}`)
+          : [...this.shadowRoot.querySelectorAll(".completion-history__date")]
+            .find((button) => button.dataset.eventId === eventId);
+        control?.focus();
+      });
+    }
   }
 
   _renderFilters(filters) {
@@ -526,12 +541,15 @@ class TimeSinceThatCard extends HTMLElement {
     if (this._pendingEntityId) {
       return;
     }
+    this._focusHistoryEventId = event.event_id;
     if (this._historyEditEventId === event.event_id) {
       this._historyEditEventId = undefined;
       this._historyEditValues.delete(event.event_id);
+      this._focusHistoryTarget = "date";
     } else {
       this._historyEditEventId = event.event_id;
       this._historyEditValues.set(event.event_id, this._localDateTimeValue(new Date(event.completed_at)));
+      this._focusHistoryTarget = "input";
     }
     this._error = undefined;
     this._render();
@@ -567,8 +585,46 @@ class TimeSinceThatCard extends HTMLElement {
         .sort((left, right) => new Date(right.completed_at) - new Date(left.completed_at)));
       this._historyEditEventId = undefined;
       this._historyEditValues.delete(eventId);
+      this._focusHistoryEventId = eventId;
+      this._focusHistoryTarget = "date";
     } catch (error) {
       this._error = error?.message || "Could not update completed date.";
+    } finally {
+      this._pendingEntityId = undefined;
+      this._render();
+    }
+  }
+
+  async _deleteCompletion(entityId, eventId, dateText, name) {
+    if (this._pendingEntityId) {
+      return;
+    }
+    if (!window.confirm(`Delete ${dateText} for ${name}? This permanently removes the completion and recalculates statistics.`)) {
+      return;
+    }
+    const sendMessage = this._connection();
+    if (!sendMessage) {
+      this._error = "Completion history requires a Home Assistant WebSocket connection.";
+      this._render();
+      return;
+    }
+    this._pendingEntityId = entityId;
+    this._error = undefined;
+    this._render();
+    try {
+      await sendMessage({
+        type: "time_since_that/delete_completion",
+        entity_id: entityId,
+        event_id: eventId,
+      });
+      const events = this._historyByEntity.get(entityId) || [];
+      this._historyByEntity.set(entityId, events.filter((event) => event.event_id !== eventId));
+      this._historyEditEventId = undefined;
+      this._historyEditValues.delete(eventId);
+    } catch (error) {
+      this._historyByEntity.delete(entityId);
+      this._historyOpenEntityId = undefined;
+      this._error = error?.message || "Could not delete completed date.";
     } finally {
       this._pendingEntityId = undefined;
       this._render();
@@ -591,12 +647,28 @@ class TimeSinceThatCard extends HTMLElement {
     for (const event of events) {
       const item = this._element("li", "completion-history__item");
       const date = new Date(event.completed_at);
-      item.append(this._element("time", "completion-history__date", Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleString()));
-      const edit = this._element("button", "history-edit-button", "Edit");
-      edit.type = "button";
-      edit.disabled = Boolean(this._pendingEntityId);
-      edit.addEventListener("click", () => this._toggleHistoryEdit(event));
-      item.append(edit);
+      const dateButton = this._element(
+        "button",
+        "completion-history__date",
+        Number.isNaN(date.getTime()) ? "Unknown date" : date.toLocaleString(),
+      );
+      dateButton.type = "button";
+      dateButton.dataset.eventId = event.event_id;
+      dateButton.disabled = Boolean(this._pendingEntityId);
+      dateButton.setAttribute("aria-expanded", String(this._historyEditEventId === event.event_id));
+      dateButton.setAttribute("aria-label", `Edit completed date ${dateButton.textContent} for ${name}`);
+      dateButton.addEventListener("click", () => this._toggleHistoryEdit(event));
+      const deleteButton = this._element("button", "history-delete-button", "×");
+      deleteButton.type = "button";
+      deleteButton.disabled = Boolean(this._pendingEntityId);
+      deleteButton.setAttribute("aria-label", `Delete completed date ${dateButton.textContent} for ${name}`);
+      deleteButton.addEventListener("click", () => this._deleteCompletion(
+        entityId,
+        event.event_id,
+        dateButton.textContent,
+        name,
+      ));
+      item.append(dateButton, deleteButton);
       if (this._historyEditEventId === event.event_id) {
         const form = this._element("form", "history-edit-form");
         const input = this._element("input", "date-entry__input");
@@ -611,7 +683,11 @@ class TimeSinceThatCard extends HTMLElement {
         const save = this._element("button", "history-save-button", this._pendingEntityId ? "Saving" : "Save");
         save.type = "submit";
         save.disabled = Boolean(this._pendingEntityId);
-        form.append(input, save);
+        const cancel = this._element("button", "history-cancel-button", "Cancel");
+        cancel.type = "button";
+        cancel.disabled = Boolean(this._pendingEntityId);
+        cancel.addEventListener("click", () => this._toggleHistoryEdit(event));
+        form.append(input, save, cancel);
         form.addEventListener("submit", (eventSubmit) => {
           eventSubmit.preventDefault();
           this._updateCompletion(entityId, event.event_id);
@@ -683,7 +759,7 @@ class TimeSinceThatCard extends HTMLElement {
     text.append(
       this._element("p", "item__name", name),
       this._element("p", "item__state", this._lastDoneText(attributes.last_done_at)),
-      this._metaPills(attributes),
+      this._metaPills(attributes, entry.entity, name),
     );
     const actions = this._element("div", "item__actions");
     const button = this._element(
@@ -701,13 +777,7 @@ class TimeSinceThatCard extends HTMLElement {
     dateButton.setAttribute("aria-expanded", String(this._dateEntryEntityId === entry.entity));
     dateButton.setAttribute("aria-label", `Enter completed date for ${name}`);
     dateButton.addEventListener("click", () => this._toggleDateEntry(entry.entity));
-    const historyButton = this._element("button", "history-toggle-button", "View completed dates");
-    historyButton.type = "button";
-    historyButton.disabled = Boolean(this._pendingEntityId);
-    historyButton.setAttribute("aria-expanded", String(this._historyOpenEntityId === entry.entity));
-    historyButton.setAttribute("aria-label", `View completed dates for ${name}`);
-    historyButton.addEventListener("click", () => this._toggleHistory(entry.entity));
-    actions.append(button, dateButton, historyButton);
+    actions.append(button, dateButton);
     if (this._dateEntryEntityId === entry.entity) {
       actions.append(this._dateEntry(entry.entity, name));
     }
@@ -718,7 +788,7 @@ class TimeSinceThatCard extends HTMLElement {
     return row;
   }
 
-  _metaPills(attributes) {
+  _metaPills(attributes, entityId, name) {
     const meta = this._element("div", "meta");
     if (attributes.recommended_every) {
       meta.append(this._pill(
@@ -739,7 +809,17 @@ class TimeSinceThatCard extends HTMLElement {
     }
     if (attributes.completion_count !== undefined) {
       const completionLabel = attributes.completion_count === 1 ? "completion" : "completions";
-      meta.append(this._pill(`${attributes.completion_count} ${completionLabel}`));
+      const completionButton = this._element(
+        "button",
+        "pill completion-history-toggle-pill",
+        `${attributes.completion_count} ${completionLabel}`,
+      );
+      completionButton.type = "button";
+      completionButton.disabled = Boolean(this._pendingEntityId);
+      completionButton.setAttribute("aria-expanded", String(this._historyOpenEntityId === entityId));
+      completionButton.setAttribute("aria-label", `View completed dates for ${name}`);
+      completionButton.addEventListener("click", () => this._toggleHistory(entityId));
+      meta.append(completionButton);
     }
     const tags = Array.isArray(attributes.tags) ? attributes.tags : [];
     for (const tag of tags) {
@@ -874,34 +954,36 @@ const CARD_STYLES = `
   .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
   .sort-control { display: grid; gap: 4px; margin: 0 0 16px; color: var(--secondary-text-color); font-size: 0.8rem; }
   .sort-control select { min-height: 38px; border: 1px solid var(--divider-color); border-radius: 8px; background: var(--card-background-color); color: var(--primary-text-color); font: inherit; }
-  .filter-button, .mark-button, .date-toggle-button, .history-toggle-button, .date-save-button, .date-cancel-button, .history-edit-button, .history-save-button { border: 0; cursor: pointer; font: inherit; }
+  .filter-button, .mark-button, .date-toggle-button, .date-save-button, .date-cancel-button, .completion-history-toggle-pill, .completion-history__date, .history-delete-button, .history-save-button, .history-cancel-button { border: 0; cursor: pointer; font: inherit; }
   .filter-button { border: 1px solid var(--divider-color); border-radius: 999px; background: var(--card-background-color); color: var(--primary-text-color); padding: 7px 11px; }
   .filter-button--selected { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color); }
   .filter-button--mixed { border-color: var(--primary-color); color: var(--primary-color); }
-  .filter-button:focus-visible, .sort-control select:focus-visible, .mark-button:focus-visible, .date-toggle-button:focus-visible, .history-toggle-button:focus-visible, .date-save-button:focus-visible, .date-cancel-button:focus-visible, .history-edit-button:focus-visible, .history-save-button:focus-visible, .date-entry__input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+  .filter-button:focus-visible, .sort-control select:focus-visible, .mark-button:focus-visible, .date-toggle-button:focus-visible, .completion-history-toggle-pill:focus-visible, .completion-history__date:focus-visible, .history-delete-button:focus-visible, .date-save-button:focus-visible, .date-cancel-button:focus-visible, .history-save-button:focus-visible, .history-cancel-button:focus-visible, .date-entry__input:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
   .items { display: grid; gap: 12px; }
   .item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px; border: 1px solid var(--divider-color); border-radius: 16px; background: var(--card-background-color); }
   .item__name { margin: 0; color: var(--primary-text-color); font-size: 1rem; font-weight: 650; }
   .item__state { margin: 4px 0 0; color: var(--primary-text-color); font-size: clamp(1rem, 4vw, 1.25rem); font-weight: 760; }
   .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .pill { display: inline-flex; min-height: 24px; padding: 3px 9px; border-radius: 999px; background: var(--secondary-background-color); color: var(--secondary-text-color); font-size: 0.78rem; }
+  .completion-history-toggle-pill { align-items: center; }
   .pill--overdue { color: var(--error-color, #db4437); }
   .pill--tag { color: var(--primary-color); }
   .item__actions { display: grid; gap: 8px; min-width: 190px; }
-  .mark-button, .date-toggle-button, .history-toggle-button, .date-save-button, .date-cancel-button { min-height: 42px; border-radius: 999px; font-size: 0.9rem; font-weight: 650; padding: 0 16px; }
+  .mark-button, .date-toggle-button, .date-save-button, .date-cancel-button { min-height: 42px; border-radius: 999px; font-size: 0.9rem; font-weight: 650; padding: 0 16px; }
   .mark-button, .date-save-button, .history-save-button { background: var(--primary-color); color: var(--text-primary-color); }
-  .date-toggle-button, .history-toggle-button, .date-cancel-button, .history-edit-button { border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); }
+  .date-toggle-button, .date-cancel-button, .completion-history__date, .history-cancel-button { border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); }
   .completion-history { display: grid; gap: 8px; padding-top: 4px; }
   .completion-history__list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
   .completion-history__item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
-  .completion-history__date { color: var(--secondary-text-color); font-size: 0.85rem; }
-  .history-edit-button, .history-save-button { min-height: 34px; border-radius: 999px; padding: 0 12px; }
-  .history-edit-form { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .completion-history__date { min-height: 34px; border-radius: 8px; padding: 0 10px; text-align: left; color: var(--secondary-text-color); font-size: 0.85rem; }
+  .history-delete-button { min-width: 34px; min-height: 34px; border-radius: 999px; background: transparent; color: var(--error-color, #db4437); font-size: 1.2rem; }
+  .history-save-button, .history-cancel-button { min-height: 34px; border-radius: 999px; padding: 0 12px; }
+  .history-edit-form { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
   .date-entry { display: grid; gap: 8px; margin-top: 4px; }
   .date-entry__label { color: var(--secondary-text-color); font-size: 0.8rem; }
   .date-entry__input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 8px; border: 1px solid var(--divider-color); border-radius: 8px; background: var(--card-background-color); color: var(--primary-text-color); font: inherit; }
   .date-entry__buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .mark-button[disabled], .date-toggle-button[disabled], .history-toggle-button[disabled], .date-save-button[disabled], .date-cancel-button[disabled], .history-edit-button[disabled], .history-save-button[disabled] { cursor: wait; opacity: 0.65; }
+  .mark-button[disabled], .date-toggle-button[disabled], .completion-history-toggle-pill[disabled], .completion-history__date[disabled], .history-delete-button[disabled], .date-save-button[disabled], .date-cancel-button[disabled], .history-save-button[disabled], .history-cancel-button[disabled] { cursor: wait; opacity: 0.65; }
   .empty-state, .card-error { margin: 14px 0 0; color: var(--secondary-text-color); }
   .card-error, .missing { color: var(--error-color, #db4437); }
   @media (max-width: 520px) { .item { grid-template-columns: 1fr; } .item__actions { width: 100%; } }

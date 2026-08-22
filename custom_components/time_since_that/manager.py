@@ -117,6 +117,24 @@ class TimeSinceThatHistoryRepository:
                 raise
             return corrected
 
+    async def async_remove_event(self, chore_id: str, event_id: str) -> CompletionEvent:
+        """Remove one event and restore memory if persistence fails."""
+        async with self._lock:
+            events = self._events.get(chore_id, [])
+            event_index = next(
+                (index for index, event in enumerate(events) if event.event_id == event_id),
+                None,
+            )
+            if event_index is None:
+                raise ValueError(f"Chore '{chore_id}' has no completion '{event_id}'.")
+            removed = events.pop(event_index)
+            try:
+                await self._async_save()
+            except Exception:
+                events.insert(event_index, removed)
+                raise
+            return removed
+
     async def _async_save(self) -> None:
         """Save every v1 bucket, including removed chore history."""
         payload = {
@@ -201,6 +219,16 @@ class TimeSinceThatManager:
         corrected = await self._history.async_replace_event(chore_id, event_id, done_at)
         self._notify_listeners()
         return corrected
+
+    async def async_delete_completion(
+        self, chore_id: str, event_id: str
+    ) -> CompletionEvent:
+        """Remove one identified completion and refresh derived state."""
+        if chore_id not in self.definitions:
+            raise ValueError(f"Unknown chore id '{chore_id}'.")
+        removed = await self._history.async_remove_event(chore_id, event_id)
+        self._notify_listeners()
+        return removed
 
     async def async_adjust_last_completed(
         self,
