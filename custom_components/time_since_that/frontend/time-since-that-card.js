@@ -5,6 +5,10 @@ const SORT_OPTIONS = [
   ["due-desc", "Due date: latest first"],
   ["interval-asc", "Recommended interval: shortest first"],
   ["interval-desc", "Recommended interval: longest first"],
+  ["recent-asc", "Last completed: oldest first"],
+  ["recent-desc", "Last completed: newest first"],
+  ["completions-asc", "Completions: fewest first"],
+  ["completions-desc", "Completions: most first"],
 ];
 
 class TimeSinceThatCard extends HTMLElement {
@@ -113,6 +117,14 @@ class TimeSinceThatCard extends HTMLElement {
 
   _sortValue(entry) {
     const attributes = this._hass?.states?.[entry.entity]?.attributes || {};
+    if (this._sort.startsWith("recent")) {
+      const lastDoneAt = new Date(attributes.last_done_at).getTime();
+      return Number.isFinite(lastDoneAt) ? lastDoneAt : null;
+    }
+    if (this._sort.startsWith("completions")) {
+      const completionCount = Number(attributes.completion_count);
+      return Number.isFinite(completionCount) && completionCount >= 0 ? completionCount : null;
+    }
     if (this._sort.startsWith("interval")) {
       const value = Number(attributes.recommended_every_value);
       const unit = attributes.recommended_every_unit;

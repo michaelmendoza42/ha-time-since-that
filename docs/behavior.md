@@ -40,7 +40,7 @@ For storage-managed Lovelace resources, the integration persistently registers t
 
 YAML-managed Lovelace resources are read-only to integrations. In that advanced mode the integration provides a best-effort frontend fallback, but the user must declare the card module in Lovelace YAML for a durable loading guarantee.
 
-- **All chores mode** discovers active Time Since That sensors, defaults to due date ascending (overdue dates first), and offers card-local tag filtering plus due-date and recommended-cadence sort controls.
+- **All chores mode** discovers active Time Since That sensors, defaults to due date ascending (overdue dates first), and offers card-local tag filtering plus ascending/descending sort controls for due date, recommended cadence, last-completed date, and completion count.
 - **One chore mode** displays a selected sensor with inline Mark done, dated-completion, and completed-date history actions.
 - **Enter completed date** opens a local date/time form below Mark done. Saving converts the local value to an ISO timestamp and appends it through `record_completion`; canceling adds nothing.
 - The `X completions` pill opens a chore's completed dates through an authenticated WebSocket command without adding history to its sensor attributes. Clicking a date opens a prefilled local date/time editor: Save replaces it and Cancel preserves it. Each date also has a separate delete action with confirmation; edits and deletions recalculate freshness and interval statistics.

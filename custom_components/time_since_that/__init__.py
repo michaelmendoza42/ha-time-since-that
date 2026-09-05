@@ -35,7 +35,7 @@ PLATFORMS = ("sensor", "button")
 CARD_FRONTEND_PATH = Path(__file__).parent / "frontend"
 CARD_URL = f"/{DOMAIN}"
 # A versioned URL makes the Companion App fetch a HACS-updated card bundle.
-CARD_VERSION = "1.0.6"
+CARD_VERSION = "1.0.7"
 CARD_JS_URL = f"{CARD_URL}/time-since-that-card.js?v={CARD_VERSION}"
 DATA_FRONTEND_REGISTERED = "frontend_registered"
 

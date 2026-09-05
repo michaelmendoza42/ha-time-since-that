@@ -94,6 +94,22 @@ test("aggregate card sorts by due date and recommended interval", async ({ page 
   await expect.poll(() => page.evaluate(() => window.cardHarness.names())).toEqual([
     "Take bins out", "Scoop cat litter", "Refill humidifier",
   ]);
+  await sort.selectOption("recent-desc");
+  await expect.poll(() => page.evaluate(() => window.cardHarness.names())).toEqual([
+    "Refill humidifier", "Scoop cat litter", "Take bins out",
+  ]);
+  await sort.selectOption("recent-asc");
+  await expect.poll(() => page.evaluate(() => window.cardHarness.names())).toEqual([
+    "Take bins out", "Scoop cat litter", "Refill humidifier",
+  ]);
+  await sort.selectOption("completions-desc");
+  await expect.poll(() => page.evaluate(() => window.cardHarness.names())).toEqual([
+    "Refill humidifier", "Scoop cat litter", "Take bins out",
+  ]);
+  await sort.selectOption("completions-asc");
+  await expect.poll(() => page.evaluate(() => window.cardHarness.names())).toEqual([
+    "Take bins out", "Scoop cat litter", "Refill humidifier",
+  ]);
 });
 
 test("completion count opens dates that can be cancelled, edited, and deleted", async ({ page }) => {
