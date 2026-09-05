@@ -100,7 +100,7 @@ title: Cat litter
 entity: sensor.time_since_that_scoop_cat_litter
 ```
 
-The card displays that chore with **Mark done** and **Enter completed date** actions. Its **X completions** pill opens every stored completion date for the chore; click a date to correct it or use its separate delete control to remove it after confirmation. History is fetched on demand through the authenticated Home Assistant WebSocket connection and is not added to sensor attributes. Date edits and deletions recalculate freshness and interval statistics.
+The card displays that chore with **Mark done** and **Enter completed date** actions. Its **X completions** pill opens the 10 most recent completion dates; **View all X completions** opens an in-dashboard dialog with the complete history. Click a date to correct it or use its separate delete control to remove it after confirmation. History is fetched on demand through the authenticated Home Assistant WebSocket connection and is not added to sensor attributes. Date edits and deletions recalculate freshness and interval statistics.
 
 ### Tag filters
 

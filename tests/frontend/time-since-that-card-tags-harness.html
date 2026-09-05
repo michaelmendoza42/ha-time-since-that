@@ -23,6 +23,10 @@
         "sensor.time_since_that_scoop_cat_litter": [
           { event_id: "litter-recent", completed_at: "2026-07-24T14:45:00Z" },
           { event_id: "litter-earlier", completed_at: "2026-07-15T14:45:00Z" },
+          ...Array.from({ length: 9 }, (_, index) => ({
+            event_id: `litter-history-${index}`,
+            completed_at: `2026-07-${String(14 - index).padStart(2, "0")}T14:45:00Z`,
+          })),
         ],
       };
       const card = document.querySelector("#card");
@@ -84,7 +88,8 @@
           sendMessagePromise: async (message) => {
             historyCalls.push(message);
             if (message.type === "time_since_that/completion_history") {
-              return { events: completionHistory[message.entity_id] || [] };
+              const events = completionHistory[message.entity_id] || [];
+              return { events: message.limit ? events.slice(0, message.limit) : events, total: events.length };
             }
             if (message.type === "time_since_that/update_completion") {
               const events = completionHistory[message.entity_id] || [];

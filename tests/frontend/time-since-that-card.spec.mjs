@@ -117,8 +117,23 @@ test("completion count opens dates that can be cancelled, edited, and deleted", 
   await page.goto(`http://127.0.0.1:${PORT}/tests/frontend/time-since-that-card-tags-harness.html`);
   await page.getByRole("button", { name: "View completed dates for Scoop cat litter" }).click();
   await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls)).toEqual([
-    { type: "time_since_that/completion_history", entity_id: "sensor.time_since_that_scoop_cat_litter" },
+    {
+      type: "time_since_that/completion_history",
+      entity_id: "sensor.time_since_that_scoop_cat_litter",
+      limit: 10,
+    },
   ]);
+  await expect(page.locator(".completion-history__date")).toHaveCount(10);
+  await page.getByRole("button", { name: "View all 11 completions" }).click();
+  const dialog = page.getByRole("dialog", { name: "All completed dates for Scoop cat litter" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".completion-history__date")).toHaveCount(11);
+  await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls[1])).toEqual({
+    type: "time_since_that/completion_history",
+    entity_id: "sensor.time_since_that_scoop_cat_litter",
+  });
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("button", { name: "View all 11 completions" })).toBeFocused();
   const firstDate = page.locator(".completion-history__date").first();
   await firstDate.click();
   const input = page.getByLabel("Completed date and time for Scoop cat litter");
@@ -126,18 +141,24 @@ test("completion count opens dates that can be cancelled, edited, and deleted", 
   await page.getByRole("button", { name: "Cancel" }).click();
   await expect(input).toHaveCount(0);
   await expect(firstDate).toBeFocused();
-  await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls)).toHaveLength(1);
+  await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls)).toHaveLength(2);
 
   await firstDate.click();
   await page.getByLabel("Completed date and time for Scoop cat litter").fill("2026-07-23T10:30");
   await page.getByRole("button", { name: "Save" }).click();
-  await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls[1])).toEqual({
+  await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls[2])).toEqual({
     type: "time_since_that/update_completion",
     entity_id: "sensor.time_since_that_scoop_cat_litter",
     event_id: "litter-recent",
     completed_at: "2026-07-23T10:30:00.000Z",
   });
 
+  await page.getByRole("button", { name: "View completed dates for Scoop cat litter" }).click();
+  await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls[3])).toEqual({
+    type: "time_since_that/completion_history",
+    entity_id: "sensor.time_since_that_scoop_cat_litter",
+    limit: 10,
+  });
   await page.evaluate(() => {
     window.confirm = (message) => {
       window.confirmMessage = message;
@@ -147,12 +168,19 @@ test("completion count opens dates that can be cancelled, edited, and deleted", 
   await page.locator(".history-delete-button").first().click();
   await expect.poll(() => page.evaluate(() => window.confirmMessage))
     .toContain("This permanently removes the completion");
-  await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls[2])).toEqual({
+  await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls[4])).toEqual({
     type: "time_since_that/delete_completion",
     entity_id: "sensor.time_since_that_scoop_cat_litter",
     event_id: "litter-recent",
   });
-  await expect(page.locator(".completion-history__date")).toHaveCount(1);
+  await expect(page.locator(".completion-history__date")).toHaveCount(0);
+  await page.getByRole("button", { name: "View completed dates for Scoop cat litter" }).click();
+  await expect.poll(() => page.evaluate(() => window.cardHarness.historyCalls[5])).toEqual({
+    type: "time_since_that/completion_history",
+    entity_id: "sensor.time_since_that_scoop_cat_litter",
+    limit: 10,
+  });
+  await expect(page.locator(".completion-history__date")).toHaveCount(10);
 });
 
 test("card shows adaptive last-done details and concise cadence", async ({ page }) => {

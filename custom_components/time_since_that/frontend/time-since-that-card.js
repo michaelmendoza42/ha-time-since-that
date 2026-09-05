@@ -1,5 +1,6 @@
 const NO_TAG_FILTER = "__time_since_that_no_tag__";
 const ALL_FILTER = "__time_since_that_all__";
+const HISTORY_PREVIEW_LIMIT = 10;
 const SORT_OPTIONS = [
   ["due-asc", "Due date: soonest first"],
   ["due-desc", "Due date: latest first"],
@@ -29,8 +30,13 @@ class TimeSinceThatCard extends HTMLElement {
     this._focusFilterKey = undefined;
     this._sort = "due-asc";
     this._historyByEntity = new Map();
+    this._historyTotals = new Map();
     this._historyOpenEntityId = undefined;
     this._historyLoadingEntityId = undefined;
+    this._historyDialogEntityId = undefined;
+    this._historyDialogEvents = undefined;
+    this._historyDialogLoading = false;
+    this._focusHistoryDialogEntityId = undefined;
     this._historyEditEventId = undefined;
     this._historyEditValues = new Map();
     this._focusHistoryEventId = undefined;
@@ -247,8 +253,7 @@ class TimeSinceThatCard extends HTMLElement {
       await this._hass.callService("time_since_that", "mark_done", {
         entity_id: entityId,
       });
-      this._historyByEntity.delete(entityId);
-      this._historyOpenEntityId = undefined;
+      this._clearHistory(entityId);
     } catch (error) {
       this._error = error?.message || "Could not mark item done.";
     } finally {
@@ -302,8 +307,7 @@ class TimeSinceThatCard extends HTMLElement {
       });
       this._dateEntryEntityId = undefined;
       this._dateEntryValues.delete(entityId);
-      this._historyByEntity.delete(entityId);
-      this._historyOpenEntityId = undefined;
+      this._clearHistory(entityId);
     } catch (error) {
       this._error = error?.message || "Could not record completed date.";
     } finally {
@@ -376,7 +380,14 @@ class TimeSinceThatCard extends HTMLElement {
     }
 
     card.append(wrap);
+    const historyDialog = this._renderHistoryDialog();
+    if (historyDialog) {
+      card.append(historyDialog);
+    }
     this.shadowRoot.replaceChildren(style, card);
+    if (historyDialog) {
+      queueMicrotask(() => historyDialog.showModal());
+    }
     if (this._focusFilterKey) {
       const key = this._focusFilterKey;
       this._focusFilterKey = undefined;
@@ -405,6 +416,17 @@ class TimeSinceThatCard extends HTMLElement {
           ? this.shadowRoot.querySelector(`#${this._historyInputId(eventId)}`)
           : [...this.shadowRoot.querySelectorAll(".completion-history__date")]
             .find((button) => button.dataset.eventId === eventId);
+        control?.focus();
+      });
+    }
+    if (this._focusHistoryDialogEntityId) {
+      const entityId = this._focusHistoryDialogEntityId;
+      this._focusHistoryDialogEntityId = undefined;
+      queueMicrotask(() => {
+        const control = [...this.shadowRoot.querySelectorAll(".history-view-all-button")]
+          .find((button) => button.dataset.entityId === entityId)
+          || [...this.shadowRoot.querySelectorAll(".completion-history-toggle-pill")]
+            .find((button) => button.dataset.entityId === entityId);
         control?.focus();
       });
     }
@@ -539,14 +561,72 @@ class TimeSinceThatCard extends HTMLElement {
     this._historyLoadingEntityId = entityId;
     this._render();
     try {
-      const result = await sendMessage({ type: "time_since_that/completion_history", entity_id: entityId });
+      const result = await sendMessage({
+        type: "time_since_that/completion_history",
+        entity_id: entityId,
+        limit: HISTORY_PREVIEW_LIMIT,
+      });
       this._historyByEntity.set(entityId, Array.isArray(result?.events) ? result.events : []);
+      this._historyTotals.set(entityId, Number(result?.total) || 0);
     } catch (error) {
       this._error = error?.message || "Could not load completion history.";
     } finally {
       this._historyLoadingEntityId = undefined;
       this._render();
     }
+  }
+
+  _clearHistory(entityId) {
+    this._historyByEntity.delete(entityId);
+    this._historyTotals.delete(entityId);
+    this._historyOpenEntityId = undefined;
+    if (this._historyDialogEntityId === entityId) {
+      this._historyDialogEntityId = undefined;
+      this._historyDialogEvents = undefined;
+      this._historyDialogLoading = false;
+    }
+  }
+
+  async _openHistoryDialog(entityId) {
+    const sendMessage = this._connection();
+    if (!sendMessage) {
+      this._error = "Completion history requires a Home Assistant WebSocket connection.";
+      this._render();
+      return;
+    }
+    const requestedEntityId = entityId;
+    this._historyDialogEntityId = requestedEntityId;
+    this._historyDialogEvents = undefined;
+    this._historyDialogLoading = true;
+    this._error = undefined;
+    this._render();
+    try {
+      const result = await sendMessage({
+        type: "time_since_that/completion_history",
+        entity_id: requestedEntityId,
+      });
+      if (this._historyDialogEntityId !== requestedEntityId) return;
+      this._historyDialogEvents = Array.isArray(result?.events) ? result.events : [];
+      this._historyTotals.set(requestedEntityId, Number(result?.total) || 0);
+    } catch (error) {
+      if (this._historyDialogEntityId !== requestedEntityId) return;
+      this._error = error?.message || "Could not load all completed dates.";
+      this._historyDialogEntityId = undefined;
+    }
+    if (this._historyDialogEntityId === requestedEntityId || this._historyDialogEntityId === undefined) {
+      this._historyDialogLoading = false;
+      this._render();
+    }
+  }
+
+  _closeHistoryDialog() {
+    const entityId = this._historyDialogEntityId;
+    this._historyDialogEntityId = undefined;
+    this._historyDialogEvents = undefined;
+    this._historyDialogLoading = false;
+    this._historyEditEventId = undefined;
+    this._focusHistoryDialogEntityId = entityId;
+    this._render();
   }
 
   _toggleHistoryEdit(event) {
@@ -591,10 +671,7 @@ class TimeSinceThatCard extends HTMLElement {
         event_id: eventId,
         completed_at: completedAt.toISOString(),
       });
-      const events = this._historyByEntity.get(entityId) || [];
-      this._historyByEntity.set(entityId, events
-        .map((event) => event.event_id === eventId ? result : event)
-        .sort((left, right) => new Date(right.completed_at) - new Date(left.completed_at)));
+      this._replaceHistoryEvent(entityId, eventId, result);
       this._historyEditEventId = undefined;
       this._historyEditValues.delete(eventId);
       this._focusHistoryEventId = eventId;
@@ -629,13 +706,11 @@ class TimeSinceThatCard extends HTMLElement {
         entity_id: entityId,
         event_id: eventId,
       });
-      const events = this._historyByEntity.get(entityId) || [];
-      this._historyByEntity.set(entityId, events.filter((event) => event.event_id !== eventId));
+      this._removeHistoryEvent(entityId, eventId);
       this._historyEditEventId = undefined;
       this._historyEditValues.delete(eventId);
     } catch (error) {
-      this._historyByEntity.delete(entityId);
-      this._historyOpenEntityId = undefined;
+      this._clearHistory(entityId);
       this._error = error?.message || "Could not delete completed date.";
     } finally {
       this._pendingEntityId = undefined;
@@ -643,14 +718,34 @@ class TimeSinceThatCard extends HTMLElement {
     }
   }
 
-  _renderHistory(entityId, name) {
+  _replaceHistoryEvent(entityId, eventId, replacement) {
+    const replace = (events) => events
+      .map((event) => event.event_id === eventId ? replacement : event)
+      .sort((left, right) => new Date(right.completed_at) - new Date(left.completed_at));
+    this._historyByEntity.delete(entityId);
+    this._historyOpenEntityId = undefined;
+    if (this._historyDialogEntityId === entityId && this._historyDialogEvents) {
+      this._historyDialogEvents = replace(this._historyDialogEvents);
+    }
+  }
+
+  _removeHistoryEvent(entityId, eventId) {
+    const remove = (events) => events.filter((event) => event.event_id !== eventId);
+    this._historyByEntity.delete(entityId);
+    this._historyOpenEntityId = undefined;
+    this._historyTotals.set(entityId, Math.max(0, (this._historyTotals.get(entityId) || 0) - 1));
+    if (this._historyDialogEntityId === entityId && this._historyDialogEvents) {
+      this._historyDialogEvents = remove(this._historyDialogEvents);
+    }
+  }
+
+  _renderHistory(entityId, name, events = this._historyByEntity.get(entityId) || [], total = this._historyTotals.get(entityId) || 0) {
     const history = this._element("section", "completion-history");
     history.setAttribute("aria-label", `Completed dates for ${name}`);
     if (this._historyLoadingEntityId === entityId) {
       history.append(this._element("p", "subtitle", "Loading completed dates…"));
       return history;
     }
-    const events = this._historyByEntity.get(entityId) || [];
     if (!events.length) {
       history.append(this._element("p", "subtitle", "No completed dates yet."));
       return history;
@@ -709,7 +804,46 @@ class TimeSinceThatCard extends HTMLElement {
       list.append(item);
     }
     history.append(list);
+    if (events.length < total) {
+      const viewAll = this._element("button", "history-view-all-button", `View all ${total} completions`);
+      viewAll.type = "button";
+      viewAll.dataset.entityId = entityId;
+      viewAll.disabled = Boolean(this._pendingEntityId);
+      viewAll.addEventListener("click", () => this._openHistoryDialog(entityId));
+      history.append(viewAll);
+    }
     return history;
+  }
+
+  _renderHistoryDialog() {
+    if (!this._historyDialogEntityId) {
+      return undefined;
+    }
+    const stateObj = this._hass?.states?.[this._historyDialogEntityId];
+    const name = stateObj?.attributes?.friendly_chore_name || stateObj?.attributes?.friendly_name || this._historyDialogEntityId;
+    const dialog = this._element("dialog", "history-dialog");
+    dialog.setAttribute("aria-label", `All completed dates for ${name}`);
+    dialog.addEventListener("close", () => {
+      if (this._historyDialogEntityId) this._closeHistoryDialog();
+    });
+    const header = this._element("header", "history-dialog__header");
+    header.append(this._element("h3", "", `All completed dates for ${name}`));
+    const close = this._element("button", "history-dialog__close", "Close");
+    close.type = "button";
+    close.addEventListener("click", () => this._closeHistoryDialog());
+    header.append(close);
+    dialog.append(header);
+    if (this._historyDialogLoading) {
+      dialog.append(this._element("p", "subtitle", "Loading completed dates…"));
+    } else {
+      dialog.append(this._renderHistory(
+        this._historyDialogEntityId,
+        name,
+        this._historyDialogEvents || [],
+        this._historyTotals.get(this._historyDialogEntityId) || 0,
+      ));
+    }
+    return dialog;
   }
 
   _dateEntry(entityId, name) {
@@ -827,6 +961,7 @@ class TimeSinceThatCard extends HTMLElement {
         `${attributes.completion_count} ${completionLabel}`,
       );
       completionButton.type = "button";
+      completionButton.dataset.entityId = entityId;
       completionButton.disabled = Boolean(this._pendingEntityId);
       completionButton.setAttribute("aria-expanded", String(this._historyOpenEntityId === entityId));
       completionButton.setAttribute("aria-label", `View completed dates for ${name}`);
@@ -989,13 +1124,18 @@ const CARD_STYLES = `
   .completion-history__item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
   .completion-history__date { min-height: 34px; border-radius: 8px; padding: 0 10px; text-align: left; color: var(--secondary-text-color); font-size: 0.85rem; }
   .history-delete-button { min-width: 34px; min-height: 34px; border-radius: 999px; background: transparent; color: var(--error-color, #db4437); font-size: 1.2rem; }
-  .history-save-button, .history-cancel-button { min-height: 34px; border-radius: 999px; padding: 0 12px; }
+  .history-save-button, .history-cancel-button, .history-view-all-button, .history-dialog__close { min-height: 34px; border-radius: 999px; padding: 0 12px; }
+  .history-view-all-button, .history-dialog__close { border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); }
   .history-edit-form { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
+  .history-dialog { width: min(680px, calc(100vw - 32px)); max-height: min(80vh, 720px); border: 0; border-radius: 16px; background: var(--card-background-color); color: var(--primary-text-color); padding: 20px; }
+  .history-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+  .history-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .history-dialog__header h3 { margin: 0; font-size: 1.1rem; }
   .date-entry { display: grid; gap: 8px; margin-top: 4px; }
   .date-entry__label { color: var(--secondary-text-color); font-size: 0.8rem; }
   .date-entry__input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 8px; border: 1px solid var(--divider-color); border-radius: 8px; background: var(--card-background-color); color: var(--primary-text-color); font: inherit; }
   .date-entry__buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .mark-button[disabled], .date-toggle-button[disabled], .completion-history-toggle-pill[disabled], .completion-history__date[disabled], .history-delete-button[disabled], .date-save-button[disabled], .date-cancel-button[disabled], .history-save-button[disabled], .history-cancel-button[disabled] { cursor: wait; opacity: 0.65; }
+  .mark-button[disabled], .date-toggle-button[disabled], .completion-history-toggle-pill[disabled], .completion-history__date[disabled], .history-delete-button[disabled], .date-save-button[disabled], .date-cancel-button[disabled], .history-save-button[disabled], .history-cancel-button[disabled], .history-view-all-button[disabled] { cursor: wait; opacity: 0.65; }
   .empty-state, .card-error { margin: 14px 0 0; color: var(--secondary-text-color); }
   .card-error, .missing { color: var(--error-color, #db4437); }
   @media (max-width: 520px) { .item { grid-template-columns: 1fr; } .item__actions { width: 100%; } }

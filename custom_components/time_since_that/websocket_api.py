@@ -51,7 +51,11 @@ def _history_payload(events: list[Any]) -> list[dict[str, str]]:
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): WS_GET_COMPLETION_HISTORY, vol.Required("entity_id"): cv.entity_id}
+    {
+        vol.Required("type"): WS_GET_COMPLETION_HISTORY,
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Optional("limit"): vol.All(vol.Coerce(int), vol.Range(min=1)),
+    }
 )
 @callback
 def websocket_get_completion_history(
@@ -64,7 +68,14 @@ def websocket_get_completion_history(
     except ValueError as err:
         connection.send_error(msg["id"], "not_found", str(err))
         return
-    connection.send_result(msg["id"], {"events": _history_payload(manager.completion_history(chore_id))})
+    events = manager.completion_history(chore_id)
+    limit = msg.get("limit")
+    if limit is not None:
+        events = events[:limit]
+    connection.send_result(
+        msg["id"],
+        {"events": _history_payload(events), "total": len(manager.completion_history(chore_id))},
+    )
 
 
 @websocket_api.websocket_command(

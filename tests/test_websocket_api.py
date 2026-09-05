@@ -36,7 +36,10 @@ class _Manager:
 
     def completion_history(self, chore_id: str) -> list[SimpleNamespace]:
         assert chore_id == "scoop_cat_litter"
-        return [SimpleNamespace(event_id="event-2", done_at=datetime(2026, 7, 24, 14, 45, tzinfo=timezone.utc))]
+        return [
+            SimpleNamespace(event_id="event-2", done_at=datetime(2026, 7, 24, 14, 45, tzinfo=timezone.utc)),
+            SimpleNamespace(event_id="event-1", done_at=datetime(2026, 7, 23, 14, 45, tzinfo=timezone.utc)),
+        ]
 
     async def async_adjust_completion(
         self, chore_id: str, event_id: str, completed_at: datetime
@@ -84,6 +87,10 @@ class TestCompletionHistoryWebSocket(unittest.TestCase):
         setattr(util, "dt", dt_util)
         voluptuous = ModuleType("voluptuous")
         setattr(voluptuous, "Required", lambda key: key)
+        setattr(voluptuous, "Optional", lambda key: key)
+        setattr(voluptuous, "All", lambda *validators: validators[-1])
+        setattr(voluptuous, "Coerce", lambda value_type: value_type)
+        setattr(voluptuous, "Range", lambda **kwargs: lambda value: value)
         return {
             "voluptuous": voluptuous,
             "homeassistant": homeassistant,
@@ -112,7 +119,12 @@ class TestCompletionHistoryWebSocket(unittest.TestCase):
             websocket.websocket_get_completion_history(
                 hass,
                 connection,
-                {"id": 1, "entity_id": "sensor.time_since_that_scoop_cat_litter"},
+                {"id": 1, "entity_id": "sensor.time_since_that_scoop_cat_litter", "limit": 1},
+            )
+            websocket.websocket_get_completion_history(
+                hass,
+                connection,
+                {"id": 4, "entity_id": "sensor.time_since_that_scoop_cat_litter"},
             )
             asyncio.run(websocket.websocket_update_completion(
                 hass,
@@ -136,15 +148,19 @@ class TestCompletionHistoryWebSocket(unittest.TestCase):
         self.assertEqual(connection.errors, [])
         self.assertEqual(connection.results[0], (1, {"events": [
             {"event_id": "event-2", "completed_at": "2026-07-24T14:45:00+00:00"},
-        ]}))
+        ], "total": 2}))
+        self.assertEqual(connection.results[1], (4, {"events": [
+            {"event_id": "event-2", "completed_at": "2026-07-24T14:45:00+00:00"},
+            {"event_id": "event-1", "completed_at": "2026-07-23T14:45:00+00:00"},
+        ], "total": 2}))
         self.assertEqual(manager.updated, (
             "scoop_cat_litter", "event-2", datetime(2026, 7, 20, 10, 30, tzinfo=timezone.utc),
         ))
-        self.assertEqual(connection.results[1], (2, {
+        self.assertEqual(connection.results[2], (2, {
             "event_id": "event-2", "completed_at": "2026-07-20T10:30:00+00:00",
         }))
         self.assertEqual(manager.deleted, ("scoop_cat_litter", "event-2"))
-        self.assertEqual(connection.results[2], (3, {"event_id": "event-2"}))
+        self.assertEqual(connection.results[3], (3, {"event_id": "event-2"}))
 
 
 if __name__ == "__main__":
