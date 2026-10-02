@@ -4,7 +4,7 @@
   "codeowners": ["@michaelmendoza42"],
   "config_flow": true,
   "single_config_entry": true,
-  "dependencies": ["frontend", "lovelace"],
+  "dependencies": ["frontend", "http", "lovelace"],
   "documentation": "https://github.com/michaelmendoza42/ha-time-since-that",
   "integration_type": "helper",
   "iot_class": "calculated",
