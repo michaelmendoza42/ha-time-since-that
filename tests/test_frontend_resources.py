@@ -12,7 +12,7 @@ from custom_components.time_since_that.frontend_resources import (
     async_reconcile_module_resource,
 )
 
-URL = "/time_since_that/time-since-that-card.js?v=1.0.4"
+URL = "/time_since_that/time-since-that-card.js?v=1.0.5"
 PATH = "/time_since_that/time-since-that-card.js"
 
 

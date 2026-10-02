@@ -23,17 +23,18 @@ This is intentionally **not a migration**: v1 does not import, modify, or delete
 1. In HACS, add this repository as a custom repository with category **Integration**.
 2. Install or update **Time Since That**.
 3. Restart Home Assistant.
-4. Go to **Settings → Devices & services → Add integration → Time Since That**.
+4. Go to **Settings → Devices & services → Helpers → Create helper → Time Since That** and create your first chore.
+
+Time Since That is a helper integration, so it appears under **Helpers** rather than the Integrations list.
 
 ## Manage chores
 
-Open **Settings → Devices & services → Time Since That → Configure**.
+Open `/config/integrations/integration/time_since_that` on your Home Assistant instance (for example `http://homeassistant.local:8123/config/integrations/integration/time_since_that`), then select **Configure**.
 
 Use the menu to:
 
 - **Add chore** — choose a name, optional category/area/tags/cadence, and optional initial last-completed date/time. Cadence supports minutes, hours, days, weeks, and fixed 30-day months.
-- **Edit chore** — update display metadata, tags, cadence, and elapsed display.
-- **Adjust last completed** — correct the latest completion timestamp. This changes freshness and interval statistics, so it is deliberately separate from ordinary editing.
+- **Edit chore** — update display metadata, tags, cadence, and elapsed display. To correct completion dates, use the single-chore card's completion history.
 - **Remove chore** — removes active entities after confirmation while retaining v1 history for safety.
 
 ### Tags

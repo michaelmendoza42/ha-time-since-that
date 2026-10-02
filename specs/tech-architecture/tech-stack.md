@@ -4,7 +4,7 @@
 
 Time Since That is a HACS-installable Home Assistant helper integration for tracking how long it has been since household chores were completed. Version 1 is configured through Home Assistant config entries, stores completion history locally, exposes one sensor and one mark-done button per chore, and bundles a Lovelace custom card.
 
-This map describes the architecture observed in the repository as of Home Assistant integration version `1.0.4`. It distinguishes current runtime behavior from the retired YAML prototype under `tools/yaml-generator/` and `examples/`.
+This map describes the architecture observed in the repository as of Home Assistant integration version `1.0.5`. It distinguishes current runtime behavior from the retired YAML prototype under `tools/yaml-generator/` and `examples/`.
 
 ## Stack
 
@@ -74,7 +74,7 @@ The early YAML configuration and legacy history are deliberately outside the v1 
 #### User configuration
 
 - `TimeSinceThatConfigFlow` creates the singleton household entry and its first chore.
-- `TimeSinceThatOptionsFlow` provides add, edit, adjust-last-completed, and remove operations.
+- `TimeSinceThatOptionsFlow` provides add, edit, and remove operations; edit and remove each use a dedicated `*_select` step to pick the chore.
 - Chore IDs are generated from the initial name, validated as lowercase snake_case, and preserved when display metadata changes.
 
 #### User actions
@@ -255,7 +255,7 @@ Tests are deterministic and narrow: UTC/fixed clocks, standard-library unittest,
 
 ### Consistency and debt signals
 
-- Version values are duplicated and currently disagree: manifest/card URL use `1.0.4`, while `package.json` and `const.VERSION` use `1.0.0`.
+- Version values are duplicated and currently disagree: manifest/card URL use `1.0.5`, while `package.json` and `const.VERSION` use `1.0.0`.
 - User-facing card/editor strings and date formatting are hard-coded English and do not use Home Assistant localization.
 - `examples/configuration.yaml` and `tools/yaml-generator/` still emit the retired YAML model. README labels the generator legacy, but these artifacts can still imply a supported runtime path unless maintained carefully.
 - A large implementation plan is tracked under a sentence-like root filename, and timestamped plan artifacts also exist at the repository root. These are planning/workspace hygiene signals rather than runtime architecture.

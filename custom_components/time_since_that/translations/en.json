@@ -31,9 +31,8 @@
       "init": {
         "menu_options": {
           "add": "Add chore",
-          "edit": "Edit chore",
-          "adjust_last_completed": "Adjust last completed",
-          "remove": "Remove chore"
+          "edit_select": "Edit chore",
+          "remove_select": "Remove chore"
         }
       },
       "add": {
@@ -67,15 +66,6 @@
           "rounding": "Elapsed display rounding"
         }
       },
-      "adjust_select": {
-        "title": "Choose a chore",
-        "data": { "selected_chore": "Chore" }
-      },
-      "adjust_last_completed": {
-        "title": "Adjust last completed",
-        "description": "This changes freshness and interval statistics.",
-        "data": { "last_completed": "Last completed" }
-      },
       "remove_select": {
         "title": "Choose a chore",
         "data": { "selected_chore": "Chore" }
@@ -92,8 +82,7 @@
       "removal_not_confirmed": "Confirm removal to continue."
     },
     "abort": {
-      "chore_not_found": "That chore no longer exists.",
-      "not_configured": "Time Since That is not configured."
+      "chore_not_found": "That chore no longer exists."
     }
   },
   "services": {

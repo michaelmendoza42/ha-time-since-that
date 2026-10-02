@@ -27,7 +27,6 @@ from .const import (
     CONF_TAGS,
     CONF_UNIT,
     CONF_VALUE,
-    DATA_MANAGER,
     DEFAULT_DISPLAY_ROUNDING,
     DEFAULT_DISPLAY_UNIT,
     DOMAIN,
@@ -47,8 +46,9 @@ CONF_RECOMMENDED_VALUE = "recommended_value"
 CONF_RECOMMENDED_UNIT = "recommended_unit"
 CONF_SELECTED_CHORE = "selected_chore"
 MENU_ADD = "add"
+MENU_EDIT_SELECT = "edit_select"
 MENU_EDIT = "edit"
-MENU_ADJUST = "adjust_last_completed"
+MENU_REMOVE_SELECT = "remove_select"
 MENU_REMOVE = "remove"
 
 
@@ -115,7 +115,7 @@ class TimeSinceThatOptionsFlow(config_entries.OptionsFlow):
         """Show chores-management actions."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=[MENU_ADD, MENU_EDIT, MENU_ADJUST, MENU_REMOVE],
+            menu_options=[MENU_ADD, MENU_EDIT_SELECT, MENU_REMOVE_SELECT],
         )
 
     async def async_step_add(
@@ -146,19 +146,26 @@ class TimeSinceThatOptionsFlow(config_entries.OptionsFlow):
             errors=errors,
         )
 
+    async def async_step_edit_select(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> config_entries.FlowResult:
+        """Choose which chore to edit."""
+        if user_input is not None:
+            self._selected_chore_id = str(user_input[CONF_SELECTED_CHORE])
+            return await self.async_step_edit()
+        return self.async_show_form(
+            step_id=MENU_EDIT_SELECT,
+            data_schema=_chore_selector_schema(_entry_chores(self.config_entry)),
+        )
+
     async def async_step_edit(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.FlowResult:
-        """Select a chore to edit or show its edit fields."""
+        """Show and apply edit fields for the selected chore."""
         if self._selected_chore_id is None:
-            if user_input is not None:
-                self._selected_chore_id = str(user_input[CONF_SELECTED_CHORE])
-                return await self.async_step_edit()
-            return self.async_show_form(
-                step_id="edit_select",
-                data_schema=_chore_selector_schema(_entry_chores(self.config_entry)),
-            )
+            return await self.async_step_edit_select()
 
         chores = _entry_chores(self.config_entry)
         current = _find_chore(chores, self._selected_chore_id)
@@ -189,60 +196,26 @@ class TimeSinceThatOptionsFlow(config_entries.OptionsFlow):
             errors=errors,
         )
 
-    async def async_step_adjust_last_completed(
+    async def async_step_remove_select(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.FlowResult:
-        """Select a chore then correct its latest completion timestamp."""
-        if self._selected_chore_id is None:
-            if user_input is not None:
-                self._selected_chore_id = str(user_input[CONF_SELECTED_CHORE])
-                return await self.async_step_adjust_last_completed()
-            return self.async_show_form(
-                step_id="adjust_select",
-                data_schema=_chore_selector_schema(_entry_chores(self.config_entry)),
-            )
-
-        manager = self.hass.data.get(DOMAIN, {}).get(DATA_MANAGER)
-        if manager is None:
-            return self.async_abort(reason="not_configured")
-
-        errors: dict[str, str] = {}
+        """Choose which chore to remove."""
         if user_input is not None:
-            try:
-                corrected = _required_past_datetime(user_input[CONF_LAST_COMPLETED])
-                await manager.async_adjust_last_completed(self._selected_chore_id, corrected)
-            except ValueError:
-                errors[CONF_LAST_COMPLETED] = "invalid_last_completed"
-            else:
-                return self.async_create_entry(
-                    data={
-                        **self.config_entry.options,
-                        CONF_CHORES: _entry_chores(self.config_entry),
-                    }
-                )
-
+            self._selected_chore_id = str(user_input[CONF_SELECTED_CHORE])
+            return await self.async_step_remove()
         return self.async_show_form(
-            step_id=MENU_ADJUST,
-            data_schema=vol.Schema(
-                {vol.Required(CONF_LAST_COMPLETED): selector.DateTimeSelector()}
-            ),
-            errors=errors,
+            step_id=MENU_REMOVE_SELECT,
+            data_schema=_chore_selector_schema(_entry_chores(self.config_entry)),
         )
 
     async def async_step_remove(
         self,
         user_input: dict[str, Any] | None = None,
     ) -> config_entries.FlowResult:
-        """Select and confirm removal of one chore definition."""
+        """Confirm removal of the selected chore definition."""
         if self._selected_chore_id is None:
-            if user_input is not None:
-                self._selected_chore_id = str(user_input[CONF_SELECTED_CHORE])
-                return await self.async_step_remove()
-            return self.async_show_form(
-                step_id="remove_select",
-                data_schema=_chore_selector_schema(_entry_chores(self.config_entry)),
-            )
+            return await self.async_step_remove_select()
 
         errors: dict[str, str] = {}
         if user_input is not None:

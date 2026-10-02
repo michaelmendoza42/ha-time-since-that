@@ -20,7 +20,7 @@ Version 1 uses UI-managed chore definitions. It deliberately does not import or 
 
 ## UI management
 
-Use **Settings → Devices & services → Time Since That → Configure** to add, edit, adjust, or remove chores.
+Open `/config/integrations/integration/time_since_that` and use **Configure** to add, edit, or remove chores. Completion dates are corrected from the single-chore card's history.
 
 - Chore IDs are derived at creation and remain immutable after rename.
 - A last-completed value must be a valid past date/time.
