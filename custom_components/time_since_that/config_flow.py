@@ -32,7 +32,6 @@ from .const import (
     DOMAIN,
     RECOMMENDED_UNITS,
     ROUNDING_MODES,
-    SOURCE_INITIAL,
     UNITS,
 )
 from .model import (

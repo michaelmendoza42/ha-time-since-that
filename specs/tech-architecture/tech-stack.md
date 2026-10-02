@@ -4,7 +4,7 @@
 
 Time Since That is a HACS-installable Home Assistant helper integration for tracking how long it has been since household chores were completed. Version 1 is configured through Home Assistant config entries, stores completion history locally, exposes one sensor and one mark-done button per chore, and bundles a Lovelace custom card.
 
-This map describes the architecture observed in the repository as of Home Assistant integration version `1.0.5`. It distinguishes current runtime behavior from the retired YAML prototype under `tools/yaml-generator/` and `examples/`.
+This map describes the architecture observed in the repository as of Home Assistant integration version `1.0.5`. The retired YAML prototype and its generator were removed before the first public release.
 
 ## Stack
 
@@ -241,8 +241,7 @@ Tests are deterministic and narrow: UTC/fixed clocks, standard-library unittest,
 ### Higher-priority validation gaps
 
 1. **Home Assistant lifecycle coverage is absent.** Config flow, options flow, setup/unload/reload, service targeting, Store failure behavior, and entity registry behavior are not exercised in a Home Assistant-compatible test environment.
-2. **Playwright is not enforced by the GitHub Tests workflow.** `npm test` includes browser regressions, but CI's Tests job runs only Python unittest discovery.
-3. **Persistent-data failure behavior is fail-fast.** Malformed storage/config data prevents entry setup, and storage save failure can leave in-memory history ahead of durable history because mutation precedes `async_save`.
+2. **Persistent-data failure behavior is fail-fast.** Malformed storage/config data prevents entry setup, and storage save failure can leave in-memory history ahead of durable history because mutation precedes `async_save`.
 
 ### Coupling and evolution risks
 
@@ -255,10 +254,7 @@ Tests are deterministic and narrow: UTC/fixed clocks, standard-library unittest,
 
 ### Consistency and debt signals
 
-- Version values are duplicated and currently disagree: manifest/card URL use `1.0.5`, while `package.json` and `const.VERSION` use `1.0.0`.
 - User-facing card/editor strings and date formatting are hard-coded English and do not use Home Assistant localization.
-- `examples/configuration.yaml` and `tools/yaml-generator/` still emit the retired YAML model. README labels the generator legacy, but these artifacts can still imply a supported runtime path unless maintained carefully.
-- A large implementation plan is tracked under a sentence-like root filename, and timestamped plan artifacts also exist at the repository root. These are planning/workspace hygiene signals rather than runtime architecture.
 - The existing plan identified mixed-unit elapsed sorting as a concern. The current card compares raw `elapsed_value`, so values expressed in different units are not directly comparable after overdue status.
 - Listener callbacks are invoked without per-listener exception isolation; one failing listener can prevent later listeners from being notified.
 - Removed history has no cleanup or restore path. Reusing a removed chore ID can reconnect the new definition to retained events and suppress initial seeding.
@@ -268,10 +264,8 @@ Tests are deterministic and narrow: UTC/fixed clocks, standard-library unittest,
 ## Surprises and Deltas From Surface Documentation
 
 - The repository is not merely a Python integration: it ships a substantial unbundled custom card/editor and therefore has two runtime surfaces and two test ecosystems.
-- The v1 model is not purely append-only event sourcing because the explicit correction flow mutates the latest event timestamp while preserving identity/attribution.
+- The v1 model is not purely append-only event sourcing because the card's history editor can correct an identified event's timestamp (preserving identity/attribution) or delete it.
 - Active definitions and history have separate persistence mechanisms and lifecycles: config-entry data/options versus Home Assistant Store.
-- The documented `npm test` baseline is broader than the GitHub Tests workflow.
-- The legacy YAML generator remains tracked even though YAML is ignored by the v1 runtime.
 
 ## Change Guidance
 

@@ -148,10 +148,6 @@ Time Since That stores its v1 completion history locally in Home Assistant. It m
 
 This repository is public/shareable. Do not commit machine-specific deployment notes, access details, credentials, tokens, or AI-agent working context.
 
-## Legacy YAML generator
-
-[`tools/yaml-generator/index.html`](tools/yaml-generator/index.html) remains available as a reference/drafting tool for the retired YAML prototype. It is not used by v1 runtime configuration.
-
 ## Development
 
 ```sh
@@ -160,6 +156,8 @@ npm test
 ```
 
 `npm test` runs the pure Python model tests and the Playwright card regression suite. Home Assistant config-flow validation still requires a Home Assistant-compatible test environment.
+
+This project was built with AI coding assistance. I direct the design, review the changes, and test releases on my own Home Assistant.
 
 ## License
 

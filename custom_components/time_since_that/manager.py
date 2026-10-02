@@ -14,7 +14,7 @@ from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .const import SOURCE_INITIAL, STORAGE_KEY, STORAGE_VERSION
+from .const import STORAGE_KEY, STORAGE_VERSION
 from .model import (
     ChoreDefinition,
     ChoreSnapshot,
@@ -77,14 +77,6 @@ class TimeSinceThatHistoryRepository:
         async with self._lock:
             self._events.setdefault(event.chore_id, []).append(event)
             await self._async_save()
-
-    async def async_replace_latest(self, chore_id: str, done_at: datetime) -> CompletionEvent:
-        """Correct the latest event while preserving its identity and attribution."""
-        events = self._events.get(chore_id, [])
-        if not events:
-            raise ValueError(f"Chore '{chore_id}' has no completion to adjust.")
-        latest = max(events, key=lambda event: event.done_at)
-        return await self.async_replace_event(chore_id, latest.event_id, done_at)
 
     async def async_replace_event(
         self, chore_id: str, event_id: str, done_at: datetime
@@ -229,29 +221,6 @@ class TimeSinceThatManager:
         removed = await self._history.async_remove_event(chore_id, event_id)
         self._notify_listeners()
         return removed
-
-    async def async_adjust_last_completed(
-        self,
-        chore_id: str,
-        done_at: datetime,
-    ) -> CompletionEvent:
-        """Correct one chore's latest completion timestamp."""
-        if chore_id not in self.definitions:
-            raise ValueError(f"Unknown chore id '{chore_id}'.")
-        done_at = required_past_datetime(
-            done_at,
-            default_timezone=dt_util.DEFAULT_TIME_ZONE,
-            now=dt_util.now(),
-        )
-        if not self._history.events_for(chore_id):
-            return await self.async_mark_done(
-                chore_id,
-                source=SOURCE_INITIAL,
-                done_at=done_at,
-            )
-        corrected = await self._history.async_replace_latest(chore_id, done_at)
-        self._notify_listeners()
-        return corrected
 
     def snapshot(self, chore_id: str, now: datetime | None = None) -> ChoreSnapshot:
         """Return calculated current state for a chore."""

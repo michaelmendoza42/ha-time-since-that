@@ -36,3 +36,6 @@ venv/
 
 # macOS
 .DS_Store
+
+# Agent planning artifacts
+*.plan.md

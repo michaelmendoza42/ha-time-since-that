@@ -4,7 +4,6 @@ from __future__ import annotations
 
 DOMAIN = "time_since_that"
 NAME = "Time Since That"
-VERSION = "1.0.0"
 
 CONF_CHORES = "chores"
 CONF_TAGS = "tags"
